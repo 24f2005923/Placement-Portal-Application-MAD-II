@@ -71,11 +71,12 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { authAPI } from '@/api/auth'
 
 const router = useRouter()
-const activeTab = ref('student')
+const route = useRoute()
+const activeTab = ref(route.query.role === 'company' ? 'company' : 'student')
 const form = ref({ email: '', password: '' })
 const loading = ref(false)
 const error = ref('')

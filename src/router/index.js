@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
-  { path: '/', redirect: '/auth/login' },
+  { path: '/', component: () => import('@/pages/public/LandingPage.vue') },
   {
     path: '/auth',
     component: () => import('@/layouts/PublicLayout.vue'),
