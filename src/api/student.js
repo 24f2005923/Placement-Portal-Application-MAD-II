@@ -1,58 +1,51 @@
-import api from './axios'
-
-// student API calls
+import httpClient from './axios'
 
 export const studentAPI = {
-
-  // dashboard stats
   getStats: function () {
-    return api.get('/api/student/stats')
+    return httpClient.get('/api/student/stats')
   },
 
-  // profile
   getProfile: function () {
-    return api.get('/api/student/profile')
-  },
-  updateProfile: function (profileData) {
-    return api.put('/api/student/profile', profileData)
+    return httpClient.get('/api/student/profile')
   },
 
-  // resume upload - needs multipart form data
+  updateProfile: function (payload) {
+    return httpClient.put('/api/student/profile', payload)
+  },
+
   uploadResume: function (file) {
     const formData = new FormData()
     formData.append('resume', file)
-    return api.post('/api/student/resume', formData, {
+    return httpClient.post('/api/student/resume', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
 
-  // placement drives
   getDrives: function (params) {
-    return api.get('/api/student/drives', { params: params || {} })
-  },
-  getDrive: function (driveId) {
-    return api.get('/api/student/drives/' + driveId)
+    return httpClient.get('/api/student/drives', { params: params || {} })
   },
 
-  // applications
+  getDrive: function (driveId) {
+    return httpClient.get('/api/student/drives/' + driveId)
+  },
+
   applyForDrive: function (driveId, coverNote) {
-    return api.post('/api/student/applications', {
+    return httpClient.post('/api/student/applications', {
       drive_id: driveId,
       cover_note: coverNote || ''
     })
   },
+
   getApplications: function () {
-    return api.get('/api/student/applications')
+    return httpClient.get('/api/student/applications')
   },
 
-  // interviews
   getInterviews: function () {
-    return api.get('/api/student/interviews')
+    return httpClient.get('/api/student/interviews')
   },
 
-  // placement history
   getHistory: function () {
-    return api.get('/api/student/history')
+    return httpClient.get('/api/student/history')
   }
-
 }
+

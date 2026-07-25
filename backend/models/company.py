@@ -1,7 +1,5 @@
 from models import db
 
-
-# Company table - stores company details and approval status
 class Company(db.Model):
     __tablename__ = 'companies'
 
@@ -16,33 +14,40 @@ class Company(db.Model):
     contact_phone = db.Column(db.String(20))
     city = db.Column(db.String(100))
     address = db.Column(db.Text)
-    approval_status = db.Column(db.String(20), default='pending')  # pending / approved / rejected
+    approval_status = db.Column(db.String(20), default='pending')  # pending, approved, rejected
     blacklisted = db.Column(db.Boolean, default=False)
 
     user = db.relationship('User', back_populates='company')
     drives = db.relationship('PlacementDrive', back_populates='company', cascade='all, delete-orphan')
 
     def to_dict(self, show_drives=False):
-        info = {
-            'id': self.id,
-            'user_id': self.user_id,
-            'company_name': self.company_name,
-            'industry': self.industry,
-            'website': self.website,
-            'description': self.description,
-            'contact_person': self.contact_person,
-            'contact_email': self.contact_email,
-            'contact_phone': self.contact_phone,
-            'city': self.city,
-            'address': self.address,
-            'approval_status': self.approval_status,
-            'blacklisted': self.blacklisted,
-            'drives_count': len(self.drives) if self.drives else 0
-        }
-        if self.user:
-            info['email'] = self.user.email
-            info['status'] = self.user.status
-        # include list of drives if needed
+        data = {}
+        data['id'] = self.id
+        data['user_id'] = self.user_id
+        data['company_name'] = self.company_name
+        data['industry'] = self.industry
+        data['website'] = self.website
+        data['description'] = self.description
+        data['contact_person'] = self.contact_person
+        data['contact_email'] = self.contact_email
+        data['contact_phone'] = self.contact_phone
+        data['city'] = self.city
+        data['address'] = self.address
+        data['approval_status'] = self.approval_status
+        data['blacklisted'] = self.blacklisted
+        data['drives_count'] = len(self.drives) if self.drives else 0
+        
+        # Add basic credentials if linked user exists
+        linked_user = self.user
+        if linked_user:
+            data['email'] = linked_user.email
+            data['status'] = linked_user.status
+            
         if show_drives:
-            info['drives'] = [d.to_dict() for d in self.drives]
-        return info
+            drives_list = []
+            for drive in self.drives:
+                drives_list.append(drive.to_dict())
+            data['drives'] = drives_list
+            
+        return data
+

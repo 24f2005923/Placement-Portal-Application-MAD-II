@@ -1,52 +1,50 @@
 import axios from 'axios'
 
-// base url of our flask backend
-const BASE_URL = 'http://localhost:5000'
+const API_SERVER_URL = 'http://localhost:5000'
 
-// create axios instance with base url
-const api = axios.create({
-  baseURL: BASE_URL,
+// Create custom http request client
+const httpClient = axios.create({
+  baseURL: API_SERVER_URL,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// before every request, attach the jwt token from localStorage
-api.interceptors.request.use(function (config) {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers['Authorization'] = 'Bearer ' + token
+// Attach Bearer Token to outgoing requests
+httpClient.interceptors.request.use(function (requestConfig) {
+  const jwtToken = localStorage.getItem('access_token')
+  if (jwtToken) {
+    requestConfig.headers['Authorization'] = 'Bearer ' + jwtToken
   }
-  return config
+  return requestConfig
 })
 
-// handle response errors globally
-api.interceptors.response.use(
-  function (response) {
-    // if request was successful just return it
-    return response
+// Handle token expiration & responses
+httpClient.interceptors.response.use(
+  function (successfulResponse) {
+    return successfulResponse
   },
-  async function (error) {
-    const originalRequest = error.config
+  async function (errorResponse) {
+    const failedRequest = errorResponse.config
 
-    // if token expired (401), try to refresh it once
-    if (error.response && error.response.status === 401 && !originalRequest._retried) {
-      originalRequest._retried = true
+    const isUnauthorized = errorResponse.response && errorResponse.response.status === 401
+    
+    if (isUnauthorized && !failedRequest._retried) {
+      failedRequest._retried = true
 
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
+      const refreshKey = localStorage.getItem('refresh_token')
+      if (refreshKey) {
         try {
-          const refreshResponse = await axios.post(
-            BASE_URL + '/api/auth/refresh',
+          const authRefreshResponse = await axios.post(
+            API_SERVER_URL + '/api/auth/refresh',
             {},
-            { headers: { Authorization: 'Bearer ' + refreshToken } }
+            { headers: { Authorization: 'Bearer ' + refreshKey } }
           )
-          const newToken = refreshResponse.data.access_token
-          localStorage.setItem('access_token', newToken)
-          originalRequest.headers['Authorization'] = 'Bearer ' + newToken
-          return api(originalRequest)
-        } catch (refreshError) {
-          // refresh also failed, clear storage and go to login
+          const newAccessToken = authRefreshResponse.data.access_token
+          localStorage.setItem('access_token', newAccessToken)
+          failedRequest.headers['Authorization'] = 'Bearer ' + newAccessToken
+          return httpClient(failedRequest)
+        } catch (refreshFailureError) {
           localStorage.clear()
           window.location.href = '/auth/login'
         }
@@ -56,8 +54,9 @@ api.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error)
+    return Promise.reject(errorResponse)
   }
 )
 
-export default api
+export default httpClient
+

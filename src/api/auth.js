@@ -1,40 +1,31 @@
-import api from './axios'
-
-// auth api functions - login, register, logout
+import httpClient from './axios'
 
 export const authAPI = {
-
-  // login with email and password
-  login: function (email, password) {
-    return api.post('/api/auth/login', { email: email, password: password })
+  login: function (emailInput, passwordInput) {
+    return httpClient.post('/api/auth/login', { email: emailInput, password: passwordInput })
   },
 
-  // register a new student
-  registerStudent: function (studentData) {
-    return api.post('/api/auth/register/student', studentData)
+  registerStudent: function (payload) {
+    return httpClient.post('/api/auth/register/student', payload)
   },
 
-  // register a new company
-  registerCompany: function (companyData) {
-    return api.post('/api/auth/register/company', companyData)
+  registerCompany: function (payload) {
+    return httpClient.post('/api/auth/register/company', payload)
   },
 
-  // logout current user
   logout: function () {
-    return api.post('/api/auth/logout')
+    return httpClient.post('/api/auth/logout')
   },
 
-  // get current logged in user info
   getCurrentUser: function () {
-    return api.get('/api/auth/me')
+    return httpClient.get('/api/auth/me')
   },
 
-  // refresh access token using refresh token
   refreshToken: function () {
-    const refreshToken = localStorage.getItem('refresh_token')
-    return api.post('/api/auth/refresh', {}, {
-      headers: { Authorization: 'Bearer ' + refreshToken }
+    const refreshKey = localStorage.getItem('refresh_token')
+    return httpClient.post('/api/auth/refresh', {}, {
+      headers: { Authorization: 'Bearer ' + refreshKey }
     })
   }
-
 }
+

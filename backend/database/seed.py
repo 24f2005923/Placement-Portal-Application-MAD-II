@@ -1,35 +1,42 @@
-from models.user import User
 from models import db
+from models.user import User
 
+# Admin configuration parameters
+DEFAULT_ADMIN_EMAIL = 'admin@admin.com'
+DEFAULT_ADMIN_PWD = 'password'
+DEFAULT_ADMIN_NAME = 'Portal Admin'
 
-# Static admin credentials for the portal
-ADMIN_EMAIL = 'admin@admin.com'
-ADMIN_PASSWORD = 'password'
-ADMIN_NAME = 'Portal Admin'
-
-
-# This function creates or updates the default admin account on startup
 def seed_admin():
-    # prefer the existing admin record if one is present
-    admin_user = User.query.filter_by(role='admin').first()
-
-    # if another account already uses the static email, only reuse it when it is the admin account
-    email_owner = User.query.filter_by(email=ADMIN_EMAIL).first()
-    if email_owner and email_owner.role != 'admin':
-        print('Admin seed skipped: ' + ADMIN_EMAIL + ' is already used by a non-admin account')
+    # Check for existing admin user using session queries
+    existing_admin = db.session.query(User).filter(User.role == 'admin').first()
+    
+    # Check if the target email address is occupied
+    email_holder = db.session.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
+    
+    if email_holder is not None and email_holder.role != 'admin':
+        print(f"Skipping admin seeding: Email {DEFAULT_ADMIN_EMAIL} is registered to a different role.")
         return
 
-    if not admin_user:
-        admin_user = email_owner or User(role='admin')
+    # Initialize or reuse user object
+    if existing_admin is None:
+        if email_holder is not None:
+            user_to_seed = email_holder
+        else:
+            user_to_seed = User(role='admin')
+    else:
+        user_to_seed = existing_admin
 
-    admin_user.name = ADMIN_NAME
-    admin_user.email = ADMIN_EMAIL
-    admin_user.role = 'admin'
-    admin_user.status = 'active'
-    admin_user.set_password(ADMIN_PASSWORD)
+    # Apply admin values
+    user_to_seed.name = DEFAULT_ADMIN_NAME
+    user_to_seed.email = DEFAULT_ADMIN_EMAIL
+    user_to_seed.role = 'admin'
+    user_to_seed.status = 'active'
+    user_to_seed.set_password(DEFAULT_ADMIN_PWD)
 
-    db.session.add(admin_user)
+    # Save to db
+    db.session.add(user_to_seed)
     db.session.commit()
 
-    print('Admin account created successfully')
-    print('Login: admin@admin.com | Password: password')
+    print("Administrator record verified/created.")
+    print(f"Login: {DEFAULT_ADMIN_EMAIL} | Credentials: {DEFAULT_ADMIN_PWD}")
+

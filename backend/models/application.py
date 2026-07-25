@@ -1,40 +1,35 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from models import db
 
-
-# Application table - when a student applies for a placement drive, it creates a row here
 class Application(db.Model):
     __tablename__ = 'applications'
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     drive_id = db.Column(db.Integer, db.ForeignKey('placement_drives.id'), nullable=False)
-    application_status = db.Column(db.String(30), default='applied')
-    # application_status values: applied / shortlisted / interview / selected / rejected
+    application_status = db.Column(db.String(30), default='applied') # applied, shortlisted, interview, selected, rejected
     cover_note = db.Column(db.Text)
-    applied_at = db.Column(db.DateTime, default=datetime.utcnow)
+    applied_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     student = db.relationship('Student', back_populates='applications')
     drive = db.relationship('PlacementDrive', back_populates='applications')
     interview = db.relationship('Interview', back_populates='application', uselist=False, cascade='all, delete-orphan')
     result = db.relationship('Result', back_populates='application', uselist=False, cascade='all, delete-orphan')
 
-    # prevent student from applying twice to the same drive
     __table_args__ = (
         db.UniqueConstraint('student_id', 'drive_id', name='one_application_per_drive'),
     )
 
     def to_dict(self, include_student=True, include_drive=True):
-        # map status to a readable stage name for the frontend
-        stage_names = {
+        # Progress maps
+        stages = {
             'applied': 'Screening',
             'shortlisted': 'HR Round',
             'interview': 'Technical',
             'selected': 'Selected',
             'rejected': 'Rejected'
         }
-        # map status to progress percentage for progress bar
-        progress_values = {
+        progress_levels = {
             'applied': 20,
             'shortlisted': 45,
             'interview': 70,
@@ -42,33 +37,37 @@ class Application(db.Model):
             'rejected': 0
         }
 
-        app_data = {
-            'id': self.id,
-            'student_id': self.student_id,
-            'drive_id': self.drive_id,
-            'application_status': self.application_status,
-            'cover_note': self.cover_note,
-            'applied_at': self.applied_at.strftime('%Y-%m-%d %H:%M') if self.applied_at else None,
-            'stage': stage_names.get(self.application_status, 'Screening'),
-            'progress': progress_values.get(self.application_status, 20)
-        }
+        dict_out = {}
+        dict_out['id'] = self.id
+        dict_out['student_id'] = self.student_id
+        dict_out['drive_id'] = self.drive_id
+        dict_out['application_status'] = self.application_status
+        dict_out['cover_note'] = self.cover_note
+        dict_out['applied_at'] = self.applied_at.strftime('%Y-%m-%d %H:%M') if self.applied_at else None
+        dict_out['stage'] = stages.get(self.application_status, 'Screening')
+        dict_out['progress'] = progress_levels.get(self.application_status, 20)
 
-        if include_student and self.student:
-            app_data['student_name'] = self.student.user.name if self.student.user else ''
-            app_data['student_register_number'] = self.student.register_number
-            app_data['student_department'] = self.student.department
-            app_data['student_cgpa'] = self.student.cgpa
+        # Merge student properties
+        linked_student = self.student
+        if include_student and linked_student:
+            dict_out['student_name'] = linked_student.user.name if linked_student.user else ''
+            dict_out['student_register_number'] = linked_student.register_number
+            dict_out['student_department'] = linked_student.department
+            dict_out['student_cgpa'] = linked_student.cgpa
 
-        if include_drive and self.drive:
-            app_data['drive_title'] = self.drive.title
-            app_data['drive_role'] = self.drive.job_role
-            app_data['drive_package'] = self.drive.package
-            app_data['company_name'] = self.drive.company.company_name if self.drive.company else ''
+        # Merge drive properties
+        linked_drive = self.drive
+        if include_drive and linked_drive:
+            dict_out['drive_title'] = linked_drive.title
+            dict_out['drive_role'] = linked_drive.job_role
+            dict_out['drive_package'] = linked_drive.package
+            dict_out['company_name'] = linked_drive.company.company_name if linked_drive.company else ''
 
         if self.interview:
-            app_data['interview'] = self.interview.to_dict()
+            dict_out['interview'] = self.interview.to_dict()
 
         if self.result:
-            app_data['result'] = self.result.to_dict()
+            dict_out['result'] = self.result.to_dict()
 
-        return app_data
+        return dict_out
+

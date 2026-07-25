@@ -11,211 +11,208 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 
-# auth blueprint handles login, register, logout
-auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+auth_bp = Blueprint('auth_routes', __name__, url_prefix='/api/auth')
 
-
-# LOGIN - POST /api/auth/login
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    # get json data from request
-    req_data = request.get_json()
+    payload = request.get_json()
+    if payload is None:
+        return jsonify({'error': 'Request body is empty'}), 400
 
-    if not req_data:
-        return jsonify({'error': 'No data received'}), 400
+    email_input = payload.get('email', '').strip().lower()
+    pwd_input = payload.get('password', '')
 
-    user_email = req_data.get('email', '').strip().lower()
-    user_password = req_data.get('password', '')
+    if not email_input or not pwd_input:
+        return jsonify({'error': 'Email and password are required parameters'}), 400
 
-    # check both fields are filled
-    if not user_email or not user_password:
-        return jsonify({'error': 'Email and password are required'}), 400
+    # Retrieve user via session query
+    matched_user = db.session.query(User).filter(User.email == email_input).first()
 
-    # find the user in database
-    user = User.query.filter_by(email=user_email).first()
-
-    # user not found
-    if not user:
+    if matched_user is None:
         return jsonify({'error': 'Invalid email or password'}), 401
 
-    # check password
-    if not user.check_password(user_password):
+    if not matched_user.check_password(pwd_input):
         return jsonify({'error': 'Invalid email or password'}), 401
 
-    # check if account is active
-    if user.status == 'inactive':
+    if matched_user.status == 'inactive':
         return jsonify({'error': 'Your account is deactivated. Please contact admin.'}), 403
 
-    # if user is a company, check if they are approved
-    if user.role == 'company':
-        company = Company.query.filter_by(user_id=user.id).first()
-        if company:
-            if company.blacklisted:
+    if matched_user.role == 'company':
+        associated_company = db.session.query(Company).filter(Company.user_id == matched_user.id).first()
+        if associated_company is not None:
+            if associated_company.blacklisted:
                 return jsonify({'error': 'Your company is blacklisted'}), 403
-            if company.approval_status == 'pending':
+            if associated_company.approval_status == 'pending':
                 return jsonify({'error': 'Your company registration is still pending approval'}), 403
 
-    # create tokens with user info embedded
-    token_claims = {'role': user.role, 'name': user.name}
-    access_token = create_access_token(identity=str(user.id), additional_claims=token_claims)
-    refresh_token = create_refresh_token(identity=str(user.id), additional_claims=token_claims)
+    # Generate custom claims
+    token_claims = {
+        'role': matched_user.role,
+        'name': matched_user.name
+    }
+    
+    access_token = create_access_token(identity=str(matched_user.id), additional_claims=token_claims)
+    refresh_token = create_refresh_token(identity=str(matched_user.id), additional_claims=token_claims)
 
-    # get the profile id (student or company id)
-    profile_id = None
-    if user.role == 'student' and user.student:
-        profile_id = user.student.id
-    elif user.role == 'company' and user.company:
-        profile_id = user.company.id
+    associated_profile_id = None
+    if matched_user.role == 'student':
+        if matched_user.student:
+            associated_profile_id = matched_user.student.id
+    elif matched_user.role == 'company':
+        if matched_user.company:
+            associated_profile_id = matched_user.company.id
 
-    print('Login successful for:', user.email)  # for debugging
+    print(f"Logged in user: {matched_user.email}")
 
     return jsonify({
         'access_token': access_token,
         'refresh_token': refresh_token,
         'user': {
-            'id': user.id,
-            'name': user.name,
-            'email': user.email,
-            'role': user.role,
-            'profile_id': profile_id
+            'id': matched_user.id,
+            'name': matched_user.name,
+            'email': matched_user.email,
+            'role': matched_user.role,
+            'profile_id': associated_profile_id
         }
     }), 200
 
-
-# STUDENT REGISTRATION - POST /api/auth/register/student
 @auth_bp.route('/register/student', methods=['POST'])
 def register_student():
-    req_data = request.get_json()
+    payload = request.get_json()
+    if not payload:
+        return jsonify({'error': 'No payload provided'}), 400
 
-    if not req_data:
-        return jsonify({'error': 'No data provided'}), 400
+    # Validation
+    required_inputs = ['name', 'email', 'password', 'register_number', 'department']
+    missing_fields = []
+    for input_key in required_inputs:
+        if not payload.get(input_key):
+            missing_fields.append(input_key)
+            
+    if missing_fields:
+        fields_str = ', '.join(missing_fields)
+        return jsonify({'error': f"Missing required fields: {fields_str}"}), 400
 
-    # check required fields
-    required_fields = ['name', 'email', 'password', 'register_number', 'department']
-    missing = []
-    for field in required_fields:
-        if not req_data.get(field):
-            missing.append(field)
+    target_email = payload['email'].strip().lower()
 
-    if missing:
-        return jsonify({'error': 'Missing required fields: ' + ', '.join(missing)}), 400
-
-    email = req_data['email'].strip().lower()
-
-    # check email not already used
-    if User.query.filter_by(email=email).first():
+    # Query for duplicates
+    email_exists = db.session.query(User).filter(User.email == target_email).first()
+    if email_exists is not None:
         return jsonify({'error': 'This email is already registered'}), 409
 
-    # check register number not already used
-    if Student.query.filter_by(register_number=req_data['register_number']).first():
+    reg_number = payload['register_number']
+    reg_exists = db.session.query(Student).filter(Student.register_number == reg_number).first()
+    if reg_exists is not None:
         return jsonify({'error': 'This register number already exists'}), 409
 
-    # create the user account
-    new_user = User(name=req_data['name'], email=email, role='student')
-    new_user.set_password(req_data['password'])
-    db.session.add(new_user)
-    db.session.flush()  # flush to get the user id before committing
-
-    # create the student profile
-    new_student = Student(
-        user_id=new_user.id,
-        register_number=req_data['register_number'],
-        department=req_data['department'],
-        year=req_data.get('year', 4),
-        phone=req_data.get('phone'),
-        cgpa=req_data.get('cgpa', 0.0)
-    )
-
-    # save skills if provided
-    if req_data.get('skills'):
-        new_student.save_skills(req_data['skills'])
-
-    db.session.add(new_student)
-    db.session.commit()
-
-    print('New student registered:', email)
-
-    return jsonify({'message': 'Student registered successfully', 'student_id': new_student.id}), 201
-
-
-# COMPANY REGISTRATION - POST /api/auth/register/company
-@auth_bp.route('/register/company', methods=['POST'])
-def register_company():
-    req_data = request.get_json()
-
-    if not req_data:
-        return jsonify({'error': 'No data provided'}), 400
-
-    required_fields = ['company_name', 'email', 'password']
-    missing = []
-    for field in required_fields:
-        if not req_data.get(field):
-            missing.append(field)
-
-    if missing:
-        return jsonify({'error': 'Missing fields: ' + ', '.join(missing)}), 400
-
-    email = req_data['email'].strip().lower()
-
-    # check if email is already registered
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': 'This email is already registered'}), 409
-
-    # create user account for company
-    new_user = User(name=req_data['company_name'], email=email, role='company')
-    new_user.set_password(req_data['password'])
-    db.session.add(new_user)
+    # Build new user account
+    created_user = User(name=payload['name'], email=target_email, role='student')
+    created_user.set_password(payload['password'])
+    db.session.add(created_user)
     db.session.flush()
 
-    # create company profile
-    new_company = Company(
-        user_id=new_user.id,
-        company_name=req_data['company_name'],
-        industry=req_data.get('industry'),
-        contact_email=req_data.get('contact_email', email),
-        contact_phone=req_data.get('phone'),
-        address=req_data.get('address'),
-        city=req_data.get('city'),
-        approval_status='pending'   # needs admin approval
+    # Build new student profile
+    created_student = Student(
+        user_id=created_user.id,
+        register_number=reg_number,
+        department=payload['department'],
+        year=payload.get('year', 4),
+        phone=payload.get('phone'),
+        cgpa=payload.get('cgpa', 0.0)
     )
-    db.session.add(new_company)
+
+    submitted_skills = payload.get('skills')
+    if submitted_skills:
+        created_student.save_skills(submitted_skills)
+
+    db.session.add(created_student)
     db.session.commit()
 
-    print('New company registered:', email)
+    print(f"Student account registered: {target_email}")
 
-    return jsonify({'message': 'Company registered. Waiting for admin approval.'}), 201
+    return jsonify({
+        'message': 'Student registered successfully',
+        'student_id': created_student.id
+    }), 201
 
+@auth_bp.route('/register/company', methods=['POST'])
+def register_company():
+    payload = request.get_json()
+    if not payload:
+        return jsonify({'error': 'No data sent'}), 400
 
-# REFRESH TOKEN - POST /api/auth/refresh
+    required_inputs = ['company_name', 'email', 'password']
+    missing_fields = []
+    for input_key in required_inputs:
+        if not payload.get(input_key):
+            missing_fields.append(input_key)
+            
+    if missing_fields:
+        fields_str = ', '.join(missing_fields)
+        return jsonify({'error': f"Missing fields: {fields_str}"}), 400
+
+    target_email = payload['email'].strip().lower()
+
+    # Query duplicate email
+    email_exists = db.session.query(User).filter(User.email == target_email).first()
+    if email_exists is not None:
+        return jsonify({'error': 'This email is already registered'}), 409
+
+    # Build company user
+    created_user = User(name=payload['company_name'], email=target_email, role='company')
+    created_user.set_password(payload['password'])
+    db.session.add(created_user)
+    db.session.flush()
+
+    # Build company profile
+    created_company = Company(
+        user_id=created_user.id,
+        company_name=payload['company_name'],
+        industry=payload.get('industry'),
+        contact_email=payload.get('contact_email', target_email),
+        contact_phone=payload.get('phone'),
+        address=payload.get('address'),
+        city=payload.get('city'),
+        approval_status='pending'
+    )
+    
+    db.session.add(created_company)
+    db.session.commit()
+
+    print(f"Company account registered: {target_email}")
+
+    return jsonify({
+        'message': 'Company registered. Waiting for admin approval.'
+    }), 201
+
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh_token():
-    user_id = get_jwt_identity()
-    old_claims = get_jwt()
+    active_identity = get_jwt_identity()
+    token_claims = get_jwt()
 
-    # carry forward the role and name in new token
-    new_claims = {
-        'role': old_claims.get('role'),
-        'name': old_claims.get('name')
+    refreshed_claims = {
+        'role': token_claims.get('role'),
+        'name': token_claims.get('name')
     }
-    new_access_token = create_access_token(identity=user_id, additional_claims=new_claims)
-
+    
+    new_access_token = create_access_token(identity=active_identity, additional_claims=refreshed_claims)
     return jsonify({'access_token': new_access_token}), 200
 
-
-# GET CURRENT USER INFO - GET /api/auth/me
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
 def get_current_user():
-    user_id = int(get_jwt_identity())
-    user = User.query.get_or_404(user_id)
-    return jsonify({'user': user.to_dict()}), 200
+    active_identity = int(get_jwt_identity())
+    user_record = db.session.query(User).filter(User.id == active_identity).first()
+    
+    if user_record is None:
+        return jsonify({'error': 'User not found'}), 404
+        
+    return jsonify({'user': user_record.to_dict()}), 200
 
-
-# LOGOUT - POST /api/auth/logout
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
-    # in a real app we would blacklist the token here
-    # for now just returning success
+    # Logout confirmation response
     return jsonify({'message': 'Logged out successfully'}), 200
+

@@ -8,123 +8,98 @@ from models.placement_drive import PlacementDrive
 from models.application import Application
 from models.result import Result
 
-# all admin routes are under /api/admin
-admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
+admin_bp = Blueprint('admin_routes', __name__, url_prefix='/api/admin')
 
-
-# ---- DASHBOARD ----
-
-# get overall stats for admin dashboard
 @admin_bp.route('/stats', methods=['GET'])
 @admin_required
 def get_dashboard_stats():
-    total_students = Student.query.count()
-    total_companies = Company.query.filter_by(blacklisted=False).count()
+    student_total_count = db.session.query(Student).count()
+    active_company_count = db.session.query(Company).filter(Company.blacklisted == False).count()
 
-    # count drives that are currently open or approved
-    active_drives = PlacementDrive.query.filter(
+    approved_open_drives = db.session.query(PlacementDrive).filter(
         PlacementDrive.status.in_(['open', 'approved'])
     ).count()
 
-    placed_count = Student.query.filter_by(placement_status='Placed').count()
+    placed_students_count = db.session.query(Student).filter(Student.placement_status == 'Placed').count()
 
-    stats_list = [
-        {'label': 'Total Students', 'value': str(total_students), 'icon': 'bi-people', 'tone': 'primary'},
-        {'label': 'Total Companies', 'value': str(total_companies), 'icon': 'bi-buildings', 'tone': 'success'},
-        {'label': 'Active Drives', 'value': str(active_drives), 'icon': 'bi-megaphone', 'tone': 'warning'},
-        {'label': 'Placed Students', 'value': str(placed_count), 'icon': 'bi-award', 'tone': 'danger'}
-    ]
+    stats_list = []
+    stats_list.append({'label': 'Total Students', 'value': str(student_total_count), 'icon': 'bi-people', 'tone': 'primary'})
+    stats_list.append({'label': 'Total Companies', 'value': str(active_company_count), 'icon': 'bi-buildings', 'tone': 'success'})
+    stats_list.append({'label': 'Active Drives', 'value': str(approved_open_drives), 'icon': 'bi-megaphone', 'tone': 'warning'})
+    stats_list.append({'label': 'Placed Students', 'value': str(placed_students_count), 'icon': 'bi-award', 'tone': 'danger'})
 
     return jsonify({'stats': stats_list}), 200
 
-
-# get recent activity for admin dashboard
 @admin_bp.route('/activities', methods=['GET'])
 @admin_required
 def get_recent_activities():
-    activities = []
+    activities_log = []
 
-    # get last 3 applications
-    recent_apps = Application.query.order_by(Application.applied_at.desc()).limit(3).all()
-    for app in recent_apps:
-        student_name = ''
+    # Get last 3 applications
+    latest_applications = db.session.query(Application).order_by(Application.applied_at.desc()).limit(3).all()
+    for app in latest_applications:
+        cand_name = ''
         if app.student and app.student.user:
-            student_name = app.student.user.name
-        drive_title = app.drive.title if app.drive else 'Unknown'
-        activities.append({
-            'title': student_name + ' applied for ' + drive_title,
-            'meta': app.applied_at.strftime('%Y-%m-%d %H:%M') if app.applied_at else '',
+            cand_name = app.student.user.name
+        drive_name = app.drive.title if app.drive else 'Unknown'
+        
+        date_str = app.applied_at.strftime('%Y-%m-%d %H:%M') if app.applied_at else ''
+        activities_log.append({
+            'title': f"{cand_name} applied for {drive_name}",
+            'meta': date_str,
             'tone': 'primary'
         })
 
-    # show pending company approvals
-    pending_companies = Company.query.filter_by(approval_status='pending').count()
-    if pending_companies > 0:
-        activities.append({
-            'title': str(pending_companies) + ' company registration(s) need approval',
+    # Show pending company approvals
+    pending_companies_count = db.session.query(Company).filter(Company.approval_status == 'pending').count()
+    if pending_companies_count > 0:
+        activities_log.append({
+            'title': f"{pending_companies_count} company registration(s) need approval",
             'meta': 'Pending',
             'tone': 'danger'
         })
 
-    # show pending drive approvals
-    pending_drives = PlacementDrive.query.filter_by(status='pending').count()
-    if pending_drives > 0:
-        activities.append({
-            'title': str(pending_drives) + ' placement drive(s) waiting for approval',
+    # Show pending drive approvals
+    pending_drives_count = db.session.query(PlacementDrive).filter(PlacementDrive.status == 'pending').count()
+    if pending_drives_count > 0:
+        activities_log.append({
+            'title': f"{pending_drives_count} placement drive(s) waiting for approval",
             'meta': 'Pending',
             'tone': 'warning'
         })
 
-    return jsonify({'activities': activities}), 200
+    return jsonify({'activities': activities_log}), 200
 
-
-# ---- REPORTS ----
+def get_percentage(part, total):
+    return round((part / total) * 100, 1) if total > 0 else 0.0
 
 @admin_bp.route('/reports/stats', methods=['GET'])
 @admin_required
 def get_report_stats():
-    total_students = Student.query.count()
-    placed = Student.query.filter_by(placement_status='Placed').count()
+    student_total_count = db.session.query(Student).count()
+    placed_students_count = db.session.query(Student).filter(Student.placement_status == 'Placed').count()
+    placement_rate = get_percentage(placed_students_count, student_total_count)
 
-    # calculate placement percentage
-    if total_students > 0:
-        placement_rate = round((placed / total_students) * 100, 1)
-    else:
-        placement_rate = 0
-
-    total_drives = PlacementDrive.query.count()
-    approved_drives = PlacementDrive.query.filter(
+    drives_total_count = db.session.query(PlacementDrive).count()
+    approved_drives_count = db.session.query(PlacementDrive).filter(
         PlacementDrive.status.in_(['open', 'approved', 'closed'])
     ).count()
+    drive_conversion = get_percentage(approved_drives_count, drives_total_count)
 
-    if total_drives > 0:
-        drive_conversion = round((approved_drives / total_drives) * 100, 1)
-    else:
-        drive_conversion = 0
+    total_applications = db.session.query(Application).count()
+    selected_applications = db.session.query(Application).filter(Application.application_status == 'selected').count()
+    interview_success = get_percentage(selected_applications, total_applications)
 
-    total_apps = Application.query.count()
-    selected_apps = Application.query.filter_by(application_status='selected').count()
+    report_metrics = []
+    report_metrics.append({'label': 'Placement Rate', 'value': f"{placement_rate}%", 'icon': 'bi-graph-up', 'tone': 'primary'})
+    report_metrics.append({'label': 'Drive Conversion', 'value': f"{drive_conversion}%", 'icon': 'bi-arrow-repeat', 'tone': 'success'})
+    report_metrics.append({'label': 'Average Package', 'value': 'N/A', 'icon': 'bi-currency-rupee', 'tone': 'warning'})
+    report_metrics.append({'label': 'Interview Success', 'value': f"{interview_success}%", 'icon': 'bi-person-check', 'tone': 'danger'})
 
-    if total_apps > 0:
-        interview_success = round((selected_apps / total_apps) * 100, 1)
-    else:
-        interview_success = 0
+    return jsonify({'stats': report_metrics}), 200
 
-    return jsonify({
-        'stats': [
-            {'label': 'Placement Rate', 'value': str(placement_rate) + '%', 'icon': 'bi-graph-up', 'tone': 'primary'},
-            {'label': 'Drive Conversion', 'value': str(drive_conversion) + '%', 'icon': 'bi-arrow-repeat', 'tone': 'success'},
-            {'label': 'Average Package', 'value': 'N/A', 'icon': 'bi-currency-rupee', 'tone': 'warning'},
-            {'label': 'Interview Success', 'value': str(interview_success) + '%', 'icon': 'bi-person-check', 'tone': 'danger'}
-        ]
-    }), 200
-
-
-# ---- SETTINGS ----
-# storing settings as a simple dict for now
-# TODO: move this to database table later
-
-portal_settings = {
+# Global portal configuration dict
+system_settings = {
     'portal_name': 'University Placement Portal',
     'academic_year': '2025-26',
     'notification_email': 'admin@admin.com',
@@ -133,281 +108,305 @@ portal_settings = {
     'instant_notifications': False
 }
 
-
 @admin_bp.route('/settings', methods=['GET'])
 @admin_required
 def get_settings():
-    return jsonify({'settings': portal_settings}), 200
-
+    return jsonify({'settings': system_settings}), 200
 
 @admin_bp.route('/settings', methods=['PUT'])
 @admin_required
 def update_settings():
-    new_data = request.get_json()
-    if new_data:
-        portal_settings.update(new_data)
-    return jsonify({'message': 'Settings updated', 'settings': portal_settings}), 200
-
-
-# ---- STUDENTS ----
+    payload = request.get_json()
+    if payload:
+        system_settings.update(payload)
+    return jsonify({'message': 'Settings updated', 'settings': system_settings}), 200
 
 @admin_bp.route('/students', methods=['GET'])
 @admin_required
 def get_all_students():
-    search = request.args.get('search', '').strip()
+    search_term = request.args.get('search', '').strip()
     status_filter = request.args.get('status', '').strip()
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 20))
+    page_num = int(request.args.get('page', 1))
+    records_per_page = int(request.args.get('per_page', 20))
 
-    query = Student.query.join(User)
+    query_builder = db.session.query(Student).join(User)
 
-    # search by name, register number, or department
-    if search:
-        search_term = '%' + search + '%'
-        query = query.filter(
+    if search_term:
+        wildcard_term = f"%{search_term}%"
+        query_builder = query_builder.filter(
             db.or_(
-                User.name.ilike(search_term),
-                Student.register_number.ilike(search_term),
-                Student.department.ilike(search_term)
+                User.name.ilike(wildcard_term),
+                Student.register_number.ilike(wildcard_term),
+                Student.department.ilike(wildcard_term)
             )
         )
 
-    # filter by status
     if status_filter and status_filter.lower() != 'all':
         if status_filter.lower() == 'inactive':
-            query = query.filter(User.status == 'inactive')
+            query_builder = query_builder.filter(User.status == 'inactive')
         else:
-            query = query.filter(Student.placement_status.ilike(status_filter))
+            query_builder = query_builder.filter(Student.placement_status.ilike(status_filter))
 
-    total = query.count()
-    students = query.offset((page - 1) * per_page).limit(per_page).all()
+    total_records = query_builder.count()
+    
+    offset_val = (page_num - 1) * records_per_page
+    students_list = query_builder.offset(offset_val).limit(records_per_page).all()
+
+    serialized_students = []
+    for s in students_list:
+        serialized_students.append(s.to_dict())
 
     return jsonify({
-        'students': [s.to_dict() for s in students],
-        'total': total,
-        'page': page,
-        'pages': (total + per_page - 1) // per_page
+        'students': serialized_students,
+        'total': total_records,
+        'page': page_num,
+        'pages': (total_records + records_per_page - 1) // records_per_page
     }), 200
-
 
 @admin_bp.route('/students/<int:student_id>', methods=['GET'])
 @admin_required
 def get_student_detail(student_id):
-    student = Student.query.get_or_404(student_id)
-    data = student.to_dict()
+    student_record = db.session.query(Student).filter(Student.id == student_id).first()
+    if student_record is None:
+        return jsonify({'error': 'Student not found'}), 404
+        
+    student_dict = student_record.to_dict()
 
-    # also include placement history
-    placement_history = []
-    for app in student.applications:
+    # Load placement history
+    placement_history_list = []
+    for app in student_record.applications:
         if app.result and app.result.result_status == 'selected':
-            placement_history.append({
+            placement_history_list.append({
                 'company': app.drive.company.company_name if app.drive and app.drive.company else '',
                 'role': app.drive.job_role if app.drive else '',
                 'year': app.applied_at.year if app.applied_at else '',
                 'package': app.drive.package if app.drive else ''
             })
 
-    data['placement_history'] = placement_history
-    return jsonify({'student': data}), 200
-
+    student_dict['placement_history'] = placement_history_list
+    return jsonify({'student': student_dict}), 200
 
 @admin_bp.route('/students/<int:student_id>', methods=['PUT'])
 @admin_required
 def update_student(student_id):
-    student = Student.query.get_or_404(student_id)
-    data = request.get_json()
-
-    if not data:
+    student_record = db.session.query(Student).filter(Student.id == student_id).first()
+    if student_record is None:
+        return jsonify({'error': 'Student not found'}), 404
+        
+    payload = request.get_json()
+    if not payload:
         return jsonify({'error': 'No data provided'}), 400
 
-    # update user fields
-    if 'name' in data:
-        student.user.name = data['name']
-    if 'email' in data:
-        student.user.email = data['email'].lower().strip()
+    if 'name' in payload:
+        student_record.user.name = payload['name']
+    if 'email' in payload:
+        student_record.user.email = payload['email'].lower().strip()
 
-    # update student fields
     updatable_fields = ['department', 'year', 'cgpa', 'phone', 'address',
                         'marks_10th', 'marks_12th', 'backlogs', 'graduation_year', 'preferred_role']
+                        
     for field in updatable_fields:
-        if field in data:
-            setattr(student, field, data[field])
+        if field in payload:
+            setattr(student_record, field, payload[field])
 
-    if 'skills' in data:
-        student.save_skills(data['skills'])
+    if 'skills' in payload:
+        student_record.save_skills(payload['skills'])
 
     db.session.commit()
-    return jsonify({'message': 'Student updated', 'student': student.to_dict()}), 200
-
+    return jsonify({'message': 'Student updated', 'student': student_record.to_dict()}), 200
 
 @admin_bp.route('/students/<int:student_id>/status', methods=['PUT'])
 @admin_required
 def change_student_status(student_id):
-    student = Student.query.get_or_404(student_id)
-    data = request.get_json()
-    new_status = data.get('status')
+    student_record = db.session.query(Student).filter(Student.id == student_id).first()
+    if student_record is None:
+        return jsonify({'error': 'Student not found'}), 404
+        
+    payload = request.get_json()
+    new_status = payload.get('status')
 
     if new_status not in ('active', 'inactive'):
         return jsonify({'error': 'Status must be active or inactive'}), 400
 
-    student.user.status = new_status
+    student_record.user.status = new_status
     db.session.commit()
 
-    return jsonify({'message': 'Student status updated to ' + new_status}), 200
-
-
-# ---- COMPANIES ----
+    return jsonify({'message': f"Student status updated to {new_status}"}), 200
 
 @admin_bp.route('/companies', methods=['GET'])
 @admin_required
 def get_all_companies():
-    search = request.args.get('search', '').strip()
+    search_term = request.args.get('search', '').strip()
     status_filter = request.args.get('status', '').strip()
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 20))
+    page_num = int(request.args.get('page', 1))
+    records_per_page = int(request.args.get('per_page', 20))
 
-    query = Company.query.join(User)
+    query_builder = db.session.query(Company).join(User)
 
-    if search:
-        search_term = '%' + search + '%'
-        query = query.filter(
+    if search_term:
+        wildcard_term = f"%{search_term}%"
+        query_builder = query_builder.filter(
             db.or_(
-                Company.company_name.ilike(search_term),
-                Company.industry.ilike(search_term),
-                Company.city.ilike(search_term)
+                Company.company_name.ilike(wildcard_term),
+                Company.industry.ilike(wildcard_term),
+                Company.city.ilike(wildcard_term)
             )
         )
 
     if status_filter and status_filter.lower() != 'all':
         if status_filter.lower() == 'blacklisted':
-            query = query.filter(Company.blacklisted == True)
+            query_builder = query_builder.filter(Company.blacklisted == True)
         else:
-            query = query.filter(
+            query_builder = query_builder.filter(
                 Company.approval_status == status_filter.lower(),
                 Company.blacklisted == False
             )
 
-    total = query.count()
-    companies = query.offset((page - 1) * per_page).limit(per_page).all()
+    total_records = query_builder.count()
+    
+    offset_val = (page_num - 1) * records_per_page
+    companies_list = query_builder.offset(offset_val).limit(records_per_page).all()
+
+    serialized_companies = []
+    for c in companies_list:
+        serialized_companies.append(c.to_dict())
 
     return jsonify({
-        'companies': [c.to_dict() for c in companies],
-        'total': total,
-        'page': page,
-        'pages': (total + per_page - 1) // per_page
+        'companies': serialized_companies,
+        'total': total_records,
+        'page': page_num,
+        'pages': (total_records + records_per_page - 1) // records_per_page
     }), 200
-
 
 @admin_bp.route('/companies/<int:company_id>', methods=['GET'])
 @admin_required
 def get_company_detail(company_id):
-    company = Company.query.get_or_404(company_id)
-    return jsonify({'company': company.to_dict(show_drives=True)}), 200
-
+    company_record = db.session.query(Company).filter(Company.id == company_id).first()
+    if company_record is None:
+        return jsonify({'error': 'Company not found'}), 404
+        
+    return jsonify({'company': company_record.to_dict(show_drives=True)}), 200
 
 @admin_bp.route('/companies/<int:company_id>/approve', methods=['PUT'])
 @admin_required
 def approve_company(company_id):
-    company = Company.query.get_or_404(company_id)
-    company.approval_status = 'approved'
-    company.blacklisted = False
+    company_record = db.session.query(Company).filter(Company.id == company_id).first()
+    if company_record is None:
+        return jsonify({'error': 'Company not found'}), 404
+        
+    company_record.approval_status = 'approved'
+    company_record.blacklisted = False
     db.session.commit()
     return jsonify({'message': 'Company approved successfully'}), 200
-
 
 @admin_bp.route('/companies/<int:company_id>/reject', methods=['PUT'])
 @admin_required
 def reject_company(company_id):
-    company = Company.query.get_or_404(company_id)
-    company.approval_status = 'rejected'
+    company_record = db.session.query(Company).filter(Company.id == company_id).first()
+    if company_record is None:
+        return jsonify({'error': 'Company not found'}), 404
+        
+    company_record.approval_status = 'rejected'
     db.session.commit()
     return jsonify({'message': 'Company rejected'}), 200
-
 
 @admin_bp.route('/companies/<int:company_id>/blacklist', methods=['PUT'])
 @admin_required
 def blacklist_company(company_id):
-    company = Company.query.get_or_404(company_id)
-    req_data = request.get_json() or {}
-    company.blacklisted = req_data.get('blacklisted', True)
+    company_record = db.session.query(Company).filter(Company.id == company_id).first()
+    if company_record is None:
+        return jsonify({'error': 'Company not found'}), 404
+        
+    payload = request.get_json() or {}
+    company_record.blacklisted = payload.get('blacklisted', True)
     db.session.commit()
 
-    if company.blacklisted:
+    if company_record.blacklisted:
         return jsonify({'message': 'Company has been blacklisted'}), 200
     else:
         return jsonify({'message': 'Company removed from blacklist'}), 200
-
-
-# ---- PLACEMENT DRIVES ----
 
 @admin_bp.route('/drives', methods=['GET'])
 @admin_required
 def get_all_drives():
     status_filter = request.args.get('status', '').strip()
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 20))
+    page_num = int(request.args.get('page', 1))
+    records_per_page = int(request.args.get('per_page', 20))
 
-    query = PlacementDrive.query.join(Company)
+    query_builder = db.session.query(PlacementDrive).join(Company)
 
     if status_filter and status_filter.lower() != 'all':
-        query = query.filter(PlacementDrive.status == status_filter.lower())
+        query_builder = query_builder.filter(PlacementDrive.status == status_filter.lower())
 
-    total = query.count()
-    drives = query.order_by(PlacementDrive.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    total_records = query_builder.count()
+    
+    offset_val = (page_num - 1) * records_per_page
+    drives_list = query_builder.order_by(PlacementDrive.created_at.desc()).offset(offset_val).limit(records_per_page).all()
+
+    serialized_drives = []
+    for d in drives_list:
+        serialized_drives.append(d.to_dict())
 
     return jsonify({
-        'drives': [d.to_dict() for d in drives],
-        'total': total,
-        'page': page,
-        'pages': (total + per_page - 1) // per_page
+        'drives': serialized_drives,
+        'total': total_records,
+        'page': page_num,
+        'pages': (total_records + records_per_page - 1) // records_per_page
     }), 200
-
 
 @admin_bp.route('/drives/<int:drive_id>', methods=['GET'])
 @admin_required
 def get_drive_detail(drive_id):
-    drive = PlacementDrive.query.get_or_404(drive_id)
-    return jsonify({'drive': drive.to_dict()}), 200
-
+    drive_record = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if drive_record is None:
+        return jsonify({'error': 'Drive not found'}), 404
+        
+    return jsonify({'drive': drive_record.to_dict()}), 200
 
 @admin_bp.route('/drives/<int:drive_id>/approve', methods=['PUT'])
 @admin_required
 def approve_drive(drive_id):
-    drive = PlacementDrive.query.get_or_404(drive_id)
-    drive.status = 'open'
+    drive_record = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if drive_record is None:
+        return jsonify({'error': 'Drive not found'}), 404
+        
+    drive_record.status = 'open'
     db.session.commit()
     return jsonify({'message': 'Drive approved and is now open'}), 200
-
 
 @admin_bp.route('/drives/<int:drive_id>/reject', methods=['PUT'])
 @admin_required
 def reject_drive(drive_id):
-    drive = PlacementDrive.query.get_or_404(drive_id)
-    drive.status = 'rejected'
+    drive_record = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if drive_record is None:
+        return jsonify({'error': 'Drive not found'}), 404
+        
+    drive_record.status = 'rejected'
     db.session.commit()
     return jsonify({'message': 'Drive rejected'}), 200
-
 
 @admin_bp.route('/drives/<int:drive_id>/status', methods=['PUT'])
 @admin_required
 def update_drive_status(drive_id):
-    drive = PlacementDrive.query.get_or_404(drive_id)
-    req_data = request.get_json()
+    drive_record = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if drive_record is None:
+        return jsonify({'error': 'Drive not found'}), 404
+        
+    payload = request.get_json()
     allowed = ['pending', 'open', 'closed', 'rejected']
-    new_status = req_data.get('status', '').lower()
+    new_status = payload.get('status', '').lower()
 
     if new_status not in allowed:
-        return jsonify({'error': 'Status must be one of: ' + ', '.join(allowed)}), 400
+        allowed_str = ', '.join(allowed)
+        return jsonify({'error': f"Status must be one of: {allowed_str}"}), 400
 
-    drive.status = new_status
+    drive_record.status = new_status
     db.session.commit()
-    return jsonify({'message': 'Drive status changed to ' + new_status}), 200
-
-
-# ---- FILE SERVING ----
+    return jsonify({'message': f"Drive status changed to {new_status}"}), 200
 
 @admin_bp.route('/resumes/<filename>', methods=['GET'])
 @admin_required
 def download_resume(filename):
     from config import Config
     return send_from_directory(Config.UPLOAD_FOLDER, filename)
+
