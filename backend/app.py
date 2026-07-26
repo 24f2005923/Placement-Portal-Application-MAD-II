@@ -17,6 +17,8 @@ from routes.auth import auth_bp
 from routes.admin import admin_bp
 from routes.company import company_bp
 from routes.student import student_bp
+from routes.exports import export_bp      # async CSV export routes
+from routes.reports import report_bp      # async report generation routes
 
 from database.seed import seed_admin
 
@@ -25,28 +27,32 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # create upload folder if it doesn't exist
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    # ── Create required directories ───────────────────────────────
+    os.makedirs(app.config['UPLOAD_FOLDER'],  exist_ok=True)
+    os.makedirs(app.config['EXPORTS_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['REPORTS_FOLDER'], exist_ok=True)
 
-    # create database folder if it doesn't exist
+    # Create database directory if it doesn't exist
     db_dir = os.path.dirname(app.config['DB_FILE'])
     os.makedirs(db_dir, exist_ok=True)
 
-    # setup CORS so frontend can connect to backend
+    # ── CORS ──────────────────────────────────────────────────────
     CORS(app, resources={r'/api/*': {'origins': app.config['CORS_ORIGINS']}},
          supports_credentials=True)
 
-    # initialize extensions
+    # ── Initialize extensions ─────────────────────────────────────
     db.init_app(app)
     JWTManager(app)
 
-    # register all blueprints (routes)
+    # ── Register blueprints (all API routes) ──────────────────────
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(company_bp)
     app.register_blueprint(student_bp)
+    app.register_blueprint(export_bp)    # POST /api/admin/export/...
+    app.register_blueprint(report_bp)    # POST /api/admin/reports/...
 
-    # simple error handlers
+    # ── Error handlers ────────────────────────────────────────────
     @app.errorhandler(404)
     def not_found_error(e):
         return jsonify({'error': 'Not found'}), 404
@@ -60,12 +66,17 @@ def create_app():
         db.session.rollback()
         return jsonify({'error': 'Internal server error'}), 500
 
-    # health check endpoint - useful for testing if server is running
+    # ── Health check ──────────────────────────────────────────────
     @app.route('/api/health', methods=['GET'])
     def health_check():
-        return jsonify({'status': 'ok', 'message': 'Placement Portal API is running'}), 200
+        from cache import cache
+        return jsonify({
+            'status': 'ok',
+            'message': 'Placement Portal API is running',
+            'redis_cache': 'connected' if cache.is_available else 'unavailable (caching disabled)',
+        }), 200
 
-    # create tables and seed initial data inside app context
+    # ── Create tables and seed admin user ─────────────────────────
     with app.app_context():
         db.create_all()
         seed_admin()

@@ -9,6 +9,8 @@ from models.application import Application
 from models.interview import Interview
 from models.result import Result
 from models.student import Student
+from cache import cache
+from cache.decorators import cache_response
 
 company_bp = Blueprint('company_routes', __name__, url_prefix='/api/company')
 
@@ -20,6 +22,7 @@ def find_company_by_uid(uid):
 
 @company_bp.route('/stats', methods=['GET'])
 @company_required
+@cache_response(lambda: f"company:stats:{get_jwt_identity()}", ttl=120)
 def get_company_stats():
     uid = get_jwt_identity()
     comp = find_company_by_uid(uid)
@@ -62,6 +65,7 @@ def get_company_stats():
 
 @company_bp.route('/profile', methods=['GET'])
 @company_required
+@cache_response(lambda: f"company:profile:{get_jwt_identity()}", ttl=300)
 def get_company_profile():
     uid = get_jwt_identity()
     comp = find_company_by_uid(uid)
@@ -93,10 +97,16 @@ def update_company_profile():
         comp.user.name = payload['name']
 
     db.session.commit()
+
+    # Invalidate this company's cached profile and stats
+    cache.delete(f'company:profile:{uid}')
+    cache.delete(f'company:stats:{uid}')
+
     return jsonify({'message': 'Profile updated', 'company': comp.to_dict()}), 200
 
 @company_bp.route('/drives', methods=['GET'])
 @company_required
+@cache_response(lambda: f"company:drives:{get_jwt_identity()}", ttl=120)
 def get_company_drives():
     uid = get_jwt_identity()
     comp = find_company_by_uid(uid)
@@ -151,6 +161,12 @@ def create_new_drive():
     db.session.add(created_drive)
     db.session.commit()
 
+    # Invalidate company drive list and admin drive caches
+    cache.delete(f'company:drives:{uid}')
+    cache.delete(f'company:stats:{uid}')
+    cache.delete_pattern('admin:drives:*')
+    cache.delete('admin:activities')
+
     return jsonify({'message': 'Drive submitted for admin approval', 'drive': created_drive.to_dict()}), 201
 
 @company_bp.route('/drives/<int:drive_id>', methods=['GET'])
@@ -204,6 +220,10 @@ def update_drive(drive_id):
         drive_record.status = payload['status']
 
     db.session.commit()
+
+    cache.delete(f'company:drives:{uid}')
+    cache.delete_pattern('admin:drives:*')
+
     return jsonify({'message': 'Drive updated', 'drive': drive_record.to_dict()}), 200
 
 @company_bp.route('/drives/<int:drive_id>', methods=['DELETE'])
@@ -224,6 +244,12 @@ def delete_drive(drive_id):
         
     db.session.delete(drive_record)
     db.session.commit()
+
+    cache.delete(f'company:drives:{uid}')
+    cache.delete(f'company:stats:{uid}')
+    cache.delete_pattern('admin:drives:*')
+    cache.delete('admin:stats')
+
     return jsonify({'message': 'Drive deleted'}), 200
 
 @company_bp.route('/applications', methods=['GET'])
@@ -285,6 +311,10 @@ def shortlist_student(app_id):
             target_student.placement_status = 'Applied'
 
     db.session.commit()
+
+    # Invalidate company stats (shortlisted count changed)
+    cache.delete(f'company:stats:{uid}')
+
     return jsonify({'message': 'Student shortlisted', 'application': app_record.to_dict()}), 200
 
 @company_bp.route('/applications/<int:app_id>/reject', methods=['PUT'])
@@ -385,6 +415,13 @@ def schedule_interview():
         app_record.student.placement_status = 'Interview'
 
     db.session.commit()
+
+    # Invalidate stats (interview count changed)
+    cache.delete(f'company:stats:{uid}')
+    if app_record.student:
+        student_user_id = app_record.student.user_id
+        cache.delete(f'student:stats:{student_user_id}')
+
     return jsonify({'message': 'Interview scheduled successfully', 'interview': interview_row.to_dict()}), 201
 
 @company_bp.route('/results', methods=['GET'])
@@ -465,5 +502,13 @@ def publish_result():
         app_record.student.placement_status = 'Placed'
 
     db.session.commit()
-    return jsonify({'message': f"Result published: {status_result}"}), 200
 
+    # Invalidate stats caches (placement counts changed)
+    cache.delete(f'company:stats:{uid}')
+    cache.delete('admin:stats')
+    cache.delete('admin:report_stats')
+    if app_record.student:
+        student_user_id = app_record.student.user_id
+        cache.delete(f'student:stats:{student_user_id}')
+
+    return jsonify({'message': f"Result published: {status_result}"}), 200

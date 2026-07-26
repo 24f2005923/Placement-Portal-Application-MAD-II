@@ -6,6 +6,8 @@ from models.student import Student
 from models.placement_drive import PlacementDrive
 from models.application import Application
 from services.file_service import save_resume, delete_resume
+from cache import cache
+from cache.decorators import cache_response
 
 student_bp = Blueprint('student_routes', __name__, url_prefix='/api/student')
 
@@ -18,6 +20,7 @@ def get_student_by_user(user_id):
 
 @student_bp.route('/stats', methods=['GET'])
 @student_required
+@cache_response(lambda: f"student:stats:{get_jwt_identity()}", ttl=120)
 def get_student_stats():
     uid = get_jwt_identity()
     stud = get_student_by_user(uid)
@@ -44,6 +47,7 @@ def get_student_stats():
 
 @student_bp.route('/profile', methods=['GET'])
 @student_required
+@cache_response(lambda: f"student:profile:{get_jwt_identity()}", ttl=300)
 def get_profile():
     uid = get_jwt_identity()
     stud = get_student_by_user(uid)
@@ -81,6 +85,11 @@ def update_profile():
         stud.save_skills(payload['skills'])
 
     db.session.commit()
+
+    # Invalidate the student's own profile and stats cache
+    cache.delete(f'student:profile:{uid}')
+    cache.delete(f'student:stats:{uid}')
+
     return jsonify({'message': 'Profile updated successfully', 'student': stud.to_dict()}), 200
 
 @student_bp.route('/resume', methods=['POST'])
@@ -109,6 +118,9 @@ def upload_resume():
     if previous_resume and previous_resume != saved_filename:
         delete_resume(previous_resume)
 
+    # Invalidate profile cache after resume change
+    cache.delete(f'student:profile:{uid}')
+
     return jsonify({
         'message': 'Resume uploaded successfully',
         'resume_path': saved_filename,
@@ -123,6 +135,10 @@ def get_resume(filename):
 
 @student_bp.route('/drives', methods=['GET'])
 @student_required
+@cache_response(
+    lambda: f"student:drives:{get_jwt_identity()}:{request.args.get('search','').strip()}",
+    ttl=120
+)
 def list_open_drives():
     uid = get_jwt_identity()
     stud = get_student_by_user(uid)
@@ -231,6 +247,13 @@ def apply_for_drive():
 
     db.session.commit()
 
+    # Invalidate student's stats and drives list (applied set changed)
+    cache.delete(f'student:stats:{uid}')
+    cache.delete_pattern(f'student:drives:{uid}:*')
+    # Also bust admin-facing stats caches
+    cache.delete('admin:stats')
+    cache.delete('admin:activities')
+
     return jsonify({
         'message': 'Application submitted successfully',
         'application': new_application.to_dict()
@@ -303,4 +326,3 @@ def get_placement_history():
         })
 
     return jsonify({'history': selection_history}), 200
-

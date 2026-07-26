@@ -7,11 +7,23 @@ from models.company import Company
 from models.placement_drive import PlacementDrive
 from models.application import Application
 from models.result import Result
+from cache import cache
+from cache.decorators import cache_response
 
 admin_bp = Blueprint('admin_routes', __name__, url_prefix='/api/admin')
 
+
+# ── Helper ────────────────────────────────────────────────────────
+
+def get_percentage(part, total):
+    return round((part / total) * 100, 1) if total > 0 else 0.0
+
+
+# ── Dashboard & Stats ─────────────────────────────────────────────
+
 @admin_bp.route('/stats', methods=['GET'])
 @admin_required
+@cache_response(lambda: 'admin:stats', ttl=300)   # cache 5 min
 def get_dashboard_stats():
     student_total_count = db.session.query(Student).count()
     active_company_count = db.session.query(Company).filter(Company.blacklisted == False).count()
@@ -32,6 +44,7 @@ def get_dashboard_stats():
 
 @admin_bp.route('/activities', methods=['GET'])
 @admin_required
+@cache_response(lambda: 'admin:activities', ttl=120)   # cache 2 min — changes frequently
 def get_recent_activities():
     activities_log = []
 
@@ -70,11 +83,10 @@ def get_recent_activities():
 
     return jsonify({'activities': activities_log}), 200
 
-def get_percentage(part, total):
-    return round((part / total) * 100, 1) if total > 0 else 0.0
 
 @admin_bp.route('/reports/stats', methods=['GET'])
 @admin_required
+@cache_response(lambda: 'admin:report_stats', ttl=600)   # cache 10 min — reports change rarely
 def get_report_stats():
     student_total_count = db.session.query(Student).count()
     placed_students_count = db.session.query(Student).filter(Student.placement_status == 'Placed').count()
@@ -97,6 +109,9 @@ def get_report_stats():
     report_metrics.append({'label': 'Interview Success', 'value': f"{interview_success}%", 'icon': 'bi-person-check', 'tone': 'danger'})
 
     return jsonify({'stats': report_metrics}), 200
+
+
+# ── Settings ──────────────────────────────────────────────────────
 
 # Global portal configuration dict
 system_settings = {
@@ -121,8 +136,15 @@ def update_settings():
         system_settings.update(payload)
     return jsonify({'message': 'Settings updated', 'settings': system_settings}), 200
 
+
+# ── Students ──────────────────────────────────────────────────────
+
 @admin_bp.route('/students', methods=['GET'])
 @admin_required
+@cache_response(
+    lambda: f"admin:students:{request.args.get('search','').strip()}:{request.args.get('status','')}:{request.args.get('page',1)}",
+    ttl=180   # cache 3 min
+)
 def get_all_students():
     search_term = request.args.get('search', '').strip()
     status_filter = request.args.get('status', '').strip()
@@ -165,6 +187,7 @@ def get_all_students():
 
 @admin_bp.route('/students/<int:student_id>', methods=['GET'])
 @admin_required
+@cache_response(lambda: f"admin:student:{request.view_args.get('student_id')}", ttl=180)
 def get_student_detail(student_id):
     student_record = db.session.query(Student).filter(Student.id == student_id).first()
     if student_record is None:
@@ -213,6 +236,12 @@ def update_student(student_id):
         student_record.save_skills(payload['skills'])
 
     db.session.commit()
+
+    # Invalidate all student-related caches so next read reflects new data
+    cache.delete_pattern('admin:students:*')
+    cache.delete(f'admin:student:{student_id}')
+    cache.delete('admin:stats')
+
     return jsonify({'message': 'Student updated', 'student': student_record.to_dict()}), 200
 
 @admin_bp.route('/students/<int:student_id>/status', methods=['PUT'])
@@ -231,10 +260,21 @@ def change_student_status(student_id):
     student_record.user.status = new_status
     db.session.commit()
 
+    # Invalidate student caches
+    cache.delete_pattern('admin:students:*')
+    cache.delete(f'admin:student:{student_id}')
+
     return jsonify({'message': f"Student status updated to {new_status}"}), 200
+
+
+# ── Companies ─────────────────────────────────────────────────────
 
 @admin_bp.route('/companies', methods=['GET'])
 @admin_required
+@cache_response(
+    lambda: f"admin:companies:{request.args.get('search','').strip()}:{request.args.get('status','')}:{request.args.get('page',1)}",
+    ttl=180
+)
 def get_all_companies():
     search_term = request.args.get('search', '').strip()
     status_filter = request.args.get('status', '').strip()
@@ -280,6 +320,7 @@ def get_all_companies():
 
 @admin_bp.route('/companies/<int:company_id>', methods=['GET'])
 @admin_required
+@cache_response(lambda: f"admin:company:{request.view_args.get('company_id')}", ttl=180)
 def get_company_detail(company_id):
     company_record = db.session.query(Company).filter(Company.id == company_id).first()
     if company_record is None:
@@ -297,6 +338,11 @@ def approve_company(company_id):
     company_record.approval_status = 'approved'
     company_record.blacklisted = False
     db.session.commit()
+
+    cache.delete_pattern('admin:companies:*')
+    cache.delete(f'admin:company:{company_id}')
+    cache.delete('admin:stats')
+
     return jsonify({'message': 'Company approved successfully'}), 200
 
 @admin_bp.route('/companies/<int:company_id>/reject', methods=['PUT'])
@@ -308,6 +354,10 @@ def reject_company(company_id):
         
     company_record.approval_status = 'rejected'
     db.session.commit()
+
+    cache.delete_pattern('admin:companies:*')
+    cache.delete(f'admin:company:{company_id}')
+
     return jsonify({'message': 'Company rejected'}), 200
 
 @admin_bp.route('/companies/<int:company_id>/blacklist', methods=['PUT'])
@@ -321,13 +371,24 @@ def blacklist_company(company_id):
     company_record.blacklisted = payload.get('blacklisted', True)
     db.session.commit()
 
+    cache.delete_pattern('admin:companies:*')
+    cache.delete(f'admin:company:{company_id}')
+    cache.delete('admin:stats')
+
     if company_record.blacklisted:
         return jsonify({'message': 'Company has been blacklisted'}), 200
     else:
         return jsonify({'message': 'Company removed from blacklist'}), 200
 
+
+# ── Placement Drives ──────────────────────────────────────────────
+
 @admin_bp.route('/drives', methods=['GET'])
 @admin_required
+@cache_response(
+    lambda: f"admin:drives:{request.args.get('status','')}:{request.args.get('page',1)}",
+    ttl=180
+)
 def get_all_drives():
     status_filter = request.args.get('status', '').strip()
     page_num = int(request.args.get('page', 1))
@@ -356,6 +417,7 @@ def get_all_drives():
 
 @admin_bp.route('/drives/<int:drive_id>', methods=['GET'])
 @admin_required
+@cache_response(lambda: f"admin:drive:{request.view_args.get('drive_id')}", ttl=180)
 def get_drive_detail(drive_id):
     drive_record = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
     if drive_record is None:
@@ -372,6 +434,12 @@ def approve_drive(drive_id):
         
     drive_record.status = 'open'
     db.session.commit()
+
+    cache.delete_pattern('admin:drives:*')
+    cache.delete(f'admin:drive:{drive_id}')
+    cache.delete('admin:stats')
+    cache.delete('admin:activities')
+
     return jsonify({'message': 'Drive approved and is now open'}), 200
 
 @admin_bp.route('/drives/<int:drive_id>/reject', methods=['PUT'])
@@ -383,6 +451,10 @@ def reject_drive(drive_id):
         
     drive_record.status = 'rejected'
     db.session.commit()
+
+    cache.delete_pattern('admin:drives:*')
+    cache.delete(f'admin:drive:{drive_id}')
+
     return jsonify({'message': 'Drive rejected'}), 200
 
 @admin_bp.route('/drives/<int:drive_id>/status', methods=['PUT'])
@@ -402,6 +474,11 @@ def update_drive_status(drive_id):
 
     drive_record.status = new_status
     db.session.commit()
+
+    cache.delete_pattern('admin:drives:*')
+    cache.delete(f'admin:drive:{drive_id}')
+    cache.delete('admin:stats')
+
     return jsonify({'message': f"Drive status changed to {new_status}"}), 200
 
 @admin_bp.route('/resumes/<filename>', methods=['GET'])
@@ -409,4 +486,3 @@ def update_drive_status(drive_id):
 def download_resume(filename):
     from config import Config
     return send_from_directory(Config.UPLOAD_FOLDER, filename)
-
