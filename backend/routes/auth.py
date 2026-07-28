@@ -11,6 +11,8 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 
+from services.auth_service import AuthService
+
 auth_bp = Blueprint('auth_routes', __name__, url_prefix='/api/auth')
 
 @auth_bp.route('/login', methods=['POST'])
@@ -19,62 +21,18 @@ def login():
     if payload is None:
         return jsonify({'error': 'Request body is empty'}), 400
 
-    email_input = payload.get('email', '').strip().lower()
+    identifier = payload.get('email') or payload.get('register_no') or payload.get('register_number') or payload.get('identifier', '')
     pwd_input = payload.get('password', '')
+    requested_role = payload.get('role', None)
 
-    if not email_input or not pwd_input:
-        return jsonify({'error': 'Email and password are required parameters'}), 400
+    matched_user, res_data, status_code = AuthService.authenticate_user(
+        identifier=identifier,
+        password=pwd_input,
+        requested_role=requested_role
+    )
 
-    # Retrieve user via session query
-    matched_user = db.session.query(User).filter(User.email == email_input).first()
+    return jsonify(res_data), status_code
 
-    if matched_user is None:
-        return jsonify({'error': 'Invalid email or password'}), 401
-
-    if not matched_user.check_password(pwd_input):
-        return jsonify({'error': 'Invalid email or password'}), 401
-
-    if matched_user.status == 'inactive':
-        return jsonify({'error': 'Your account is deactivated. Please contact admin.'}), 403
-
-    if matched_user.role == 'company':
-        associated_company = db.session.query(Company).filter(Company.user_id == matched_user.id).first()
-        if associated_company is not None:
-            if associated_company.blacklisted:
-                return jsonify({'error': 'Your company is blacklisted'}), 403
-            if associated_company.approval_status == 'pending':
-                return jsonify({'error': 'Your company registration is still pending approval'}), 403
-
-    # Generate custom claims
-    token_claims = {
-        'role': matched_user.role,
-        'name': matched_user.name
-    }
-    
-    access_token = create_access_token(identity=str(matched_user.id), additional_claims=token_claims)
-    refresh_token = create_refresh_token(identity=str(matched_user.id), additional_claims=token_claims)
-
-    associated_profile_id = None
-    if matched_user.role == 'student':
-        if matched_user.student:
-            associated_profile_id = matched_user.student.id
-    elif matched_user.role == 'company':
-        if matched_user.company:
-            associated_profile_id = matched_user.company.id
-
-    print(f"Logged in user: {matched_user.email}")
-
-    return jsonify({
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'user': {
-            'id': matched_user.id,
-            'name': matched_user.name,
-            'email': matched_user.email,
-            'role': matched_user.role,
-            'profile_id': associated_profile_id
-        }
-    }), 200
 
 @auth_bp.route('/register/student', methods=['POST'])
 def register_student():
