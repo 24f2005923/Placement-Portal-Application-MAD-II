@@ -15,7 +15,13 @@ Design notes:
 import json
 import logging
 import os
-import redis
+
+try:
+    import redis
+    HAS_REDIS = True
+except ImportError:
+    redis = None
+    HAS_REDIS = False
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +30,16 @@ class RedisCache:
     """Thin wrapper around redis.Redis for JSON-serialised caching."""
 
     def __init__(self):
+        # Check if the python redis package is installed.
+        if not HAS_REDIS:
+            self._client = None
+            self._available = False
+            logger.warning(
+                'Redis module is not installed ("redis" package missing). Caching is disabled — '
+                'all routes will work normally, just without caching.'
+            )
+            return
+
         # Read the Redis URL from the environment (or fall back to localhost).
         redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
         try:
@@ -38,11 +54,13 @@ class RedisCache:
             self._available = True
             logger.info('Redis cache connected: %s', redis_url)
         except Exception as exc:
+            self._client = None
             self._available = False
             logger.warning(
                 'Redis is not available (%s). Caching is disabled — '
                 'all routes will work normally, just without caching.', exc
             )
+
 
     # ── Public API ────────────────────────────────────────────────
 
