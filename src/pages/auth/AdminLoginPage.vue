@@ -40,7 +40,7 @@ async function handleLogin() {
   loading.value = true
   error.value = ''
   try {
-    const { data } = await authAPI.login(form.value.email, form.value.password)
+    const { data } = await authAPI.login(form.value.email, form.value.password, 'admin')
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
     localStorage.setItem('user', JSON.stringify(data.user))

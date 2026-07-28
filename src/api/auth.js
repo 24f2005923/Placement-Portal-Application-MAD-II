@@ -1,8 +1,12 @@
 import httpClient from './axios'
 
 export const authAPI = {
-  login: function (emailInput, passwordInput) {
-    return httpClient.post('/api/auth/login', { email: emailInput, password: passwordInput })
+  login: function (emailInput, passwordInput, roleInput) {
+    const payload = { email: emailInput, password: passwordInput }
+    if (roleInput) {
+      payload.role = roleInput
+    }
+    return httpClient.post('/api/auth/login', payload)
   },
 
   registerStudent: function (payload) {

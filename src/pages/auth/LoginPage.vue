@@ -28,12 +28,12 @@
 
     <form class="row g-3" @submit.prevent="handleLogin">
       <div class="col-12">
-        <label class="form-label">Email Address</label>
+        <label class="form-label">{{ activeTab === 'student' ? 'Email Address or Register Number' : 'Email Address' }}</label>
         <input
           v-model="form.email"
-          type="email"
+          :type="activeTab === 'student' ? 'text' : 'email'"
           class="form-control form-control-lg"
-          :placeholder="activeTab === 'student' ? 'student@university.edu' : 'hr@company.com'"
+          :placeholder="activeTab === 'student' ? 'student@university.edu or REG123' : 'hr@company.com'"
           required
         />
       </div>
@@ -85,15 +85,14 @@ async function handleLogin() {
   loading.value = true
   error.value = ''
   try {
-    const { data } = await authAPI.login(form.value.email, form.value.password)
+    const { data } = await authAPI.login(form.value.email, form.value.password, activeTab.value)
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
     localStorage.setItem('user', JSON.stringify(data.user))
 
     const role = data.user.role
     if (role === 'admin') {
-      error.value = 'Invalid credentials. Please check your email and password.'
-      localStorage.clear()
+      router.push('/admin/dashboard')
     } else if (role === 'company') {
       router.push('/company/dashboard')
     } else {
