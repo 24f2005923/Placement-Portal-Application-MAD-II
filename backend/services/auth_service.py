@@ -1,4 +1,5 @@
 import logging
+from sqlalchemy import func, or_
 from flask_jwt_extended import create_access_token, create_refresh_token
 from models import db
 from models.user import User
@@ -17,13 +18,21 @@ if not logger.handlers:
 
 class AuthService:
     """
-    Generic Authentication Service for all user roles (Student, Company, Admin).
-    Provides modular pipeline for:
-    - Input payload validation
-    - Database lookup (by email or student register number)
-    - Secure password hash verification
-    - User account status and role authorization
-    - JWT token generation and response payload formatting
+    Generic, Production-Ready Authentication Service for all user roles (Student, Company, Admin).
+    
+    Robust Multi-Strategy Lookup Pipeline:
+    1. Case-insensitive Email lookup (`User.email`)
+    2. Case-insensitive Register Number lookup (`Student.register_number`)
+    3. Case-insensitive Student Name lookup (`User.name`)
+    4. Flexible Prefix / Typo Tolerance lookup (matches email local part or student name)
+    
+    Strict Pipeline Checks:
+    - Input Validation
+    - Account Resolution
+    - Password Hash Verification (`check_password_hash`)
+    - Account Active Status Check
+    - Role Authorization & Company Approval Validation
+    - JWT Generation & Student-Friendly Error Handling
     """
 
     @staticmethod
@@ -57,43 +66,78 @@ class AuthService:
         logger.info("Pipeline Step 1: Validating request payload format")
         if not identifier or not str(identifier).strip() or not password:
             logger.warning("Authentication failed: Missing identifier or password")
-            return None, {'error': 'Email/Register number and password are required'}, 400
+            return None, {'error': 'Email/Register number and password are required parameters'}, 400
 
         clean_identifier = str(identifier).strip()
-        logger.info(f"Pipeline Step 2: Database lookup for identifier: '{clean_identifier}'")
+        lower_identifier = clean_identifier.lower()
+        logger.info(f"Pipeline Step 2: Generic multi-field database lookup for identifier: '{clean_identifier}'")
 
-        # Step 2a: Lookup by email (case-insensitive)
-        matched_user = db.session.query(User).filter(User.email == clean_identifier.lower()).first()
+        matched_user = None
 
-        # Step 2b: Fallback lookup by Student register_number if not found by email
+        # Strategy 2a: Lookup by Email (case-insensitive exact)
+        matched_user = db.session.query(User).filter(func.lower(User.email) == lower_identifier).first()
+        if matched_user:
+            logger.info(f"User resolved via User email '{matched_user.email}' -> User ID: {matched_user.id}")
+
+        # Strategy 2b: Fallback lookup by Student register_number (case-insensitive exact)
         if matched_user is None:
-            logger.info("Identifier not found in User email column; attempting Student register_number lookup")
-            student_record = db.session.query(Student).filter(Student.register_number == clean_identifier).first()
+            student_record = db.session.query(Student).filter(func.lower(Student.register_number) == lower_identifier).first()
             if student_record and student_record.user:
                 matched_user = student_record.user
-                logger.info(f"User resolved via Student register_number '{clean_identifier}' -> User ID: {matched_user.id}")
+                logger.info(f"User resolved via Student register_number '{student_record.register_number}' -> User ID: {matched_user.id}")
+
+        # Strategy 2c: Fallback lookup by User name (case-insensitive exact)
+        if matched_user is None:
+            name_matched_user = db.session.query(User).filter(func.lower(User.name) == lower_identifier).first()
+            if name_matched_user:
+                matched_user = name_matched_user
+                logger.info(f"User resolved via User name '{matched_user.name}' -> User ID: {matched_user.id}")
+
+        # Strategy 2d: Flexible Prefix / Typo Fallback (handles domain/spelling typos like adhithya@gmail.com vs adhithiya@gmail.com)
+        if matched_user is None and '@' in lower_identifier:
+            local_part = lower_identifier.split('@')[0]
+            prefix_len = min(len(local_part), 5)
+            if prefix_len >= 3:
+                search_prefix = local_part[:prefix_len]
+                candidates = db.session.query(User).filter(
+                    or_(
+                        func.lower(User.email).like(f"{search_prefix}%"),
+                        func.lower(User.name).like(f"{search_prefix}%")
+                    )
+                ).all()
+                if len(candidates) == 1:
+                    matched_user = candidates[0]
+                    logger.info(f"User resolved via flexible prefix candidate '{matched_user.email}' -> User ID: {matched_user.id}")
 
         if matched_user is None:
             logger.warning(f"Authentication failed: No account matching identifier '{clean_identifier}'")
-            return None, {'error': 'Invalid credentials'}, 401
+            return None, {
+                'error': 'Invalid credentials. Account not found. Please check your Email Address or Register Number.'
+            }, 401
 
         logger.info(f"Pipeline Step 3: Verifying password hash for User ID: {matched_user.id} ({matched_user.email})")
         # Step 3: Password verification via werkzeug.security check_password_hash
         if not matched_user.check_password(password):
             logger.warning(f"Authentication failed: Password verification failed for User ID: {matched_user.id}")
-            return None, {'error': 'Invalid credentials'}, 401
+            return None, {
+                'error': 'Invalid credentials. Password incorrect. Please check your password.'
+            }, 401
 
         logger.info(f"Pipeline Step 4: Checking account status for User ID: {matched_user.id}")
         # Step 4: Account active status check
         if matched_user.status == 'inactive':
             logger.warning(f"Authentication failed: Account inactive for User ID: {matched_user.id}")
-            return None, {'error': 'Your account is deactivated. Please contact admin.'}, 403
+            return None, {
+                'error': 'Your account is deactivated. Please contact admin.'
+            }, 403
 
-        logger.info(f"Pipeline Step 5: Validating role and account constraints (Role: {matched_user.role})")
+        logger.info(f"Pipeline Step 5: Validating role and account constraints (Actual Role: {matched_user.role})")
         # Step 5a: Role mismatch check if a specific role was requested
         if requested_role and matched_user.role != requested_role:
             logger.warning(f"Authentication failed: Role mismatch. Actual: '{matched_user.role}', Requested: '{requested_role}'")
-            return None, {'error': f'Access denied: This portal is for {requested_role} accounts only'}, 403
+            return None, {
+                'error': f'Access denied: This account is registered as a {matched_user.role.capitalize()}, not a {requested_role.capitalize()}.'
+            }, 403
 
         # Step 5b: Company specific checks (blacklisted / approval pending)
         if matched_user.role == 'company':
