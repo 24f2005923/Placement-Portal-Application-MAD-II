@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import AppHeader from '@/components/common/AppHeader.vue'
-import Breadcrumbs from '@/components/common/Breadcrumbs.vue'
 import { adminNav, companyNav, studentNav } from '@/data/navigation'
 
 const route = useRoute()
@@ -30,9 +29,6 @@ watch(
     <div class="portal-main d-flex flex-column">
       <AppHeader @toggle-sidebar="mobileSidebarOpen = !mobileSidebarOpen" />
       <div class="container-fluid py-4 py-lg-5">
-        <div class="mb-4">
-          <Breadcrumbs />
-        </div>
         <router-view />
       </div>
     </div>

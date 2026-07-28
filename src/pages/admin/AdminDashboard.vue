@@ -1,7 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import StatCard from '@/components/common/StatCard.vue'
-import ChartPlaceholder from '@/components/common/ChartPlaceholder.vue'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import { adminAPI } from '@/api/admin'
@@ -9,7 +8,6 @@ import { adminAPI } from '@/api/admin'
 const stats = ref([])
 const drives = ref([])
 const students = ref([])
-const activities = ref([])
 const loading = ref(true)
 
 const driveHeaders = ['Company', 'Role', 'Package', 'Deadline', 'Status']
@@ -19,16 +17,14 @@ const studentColumns = ['name', 'department', 'cgpa', 'status', 'placement_statu
 
 onMounted(async () => {
   try {
-    const [statsRes, drivesRes, studentsRes, activitiesRes] = await Promise.all([
+    const [statsRes, drivesRes, studentsRes] = await Promise.all([
       adminAPI.getStats(),
       adminAPI.getDrives({ per_page: 5 }),
-      adminAPI.getStudents({ per_page: 5 }),
-      adminAPI.getActivities()
+      adminAPI.getStudents({ per_page: 5 })
     ])
     stats.value = statsRes.data.stats
     drives.value = drivesRes.data.drives
     students.value = studentsRes.data.students
-    activities.value = activitiesRes.data.activities
   } catch (err) {
     console.error('Dashboard load error:', err)
   } finally {
@@ -45,32 +41,6 @@ onMounted(async () => {
     <template v-else>
       <div v-for="item in stats" :key="item.label" class="col-12 col-sm-6 col-xl-3">
         <StatCard v-bind="item" />
-      </div>
-
-      <div class="col-12 col-xl-8">
-        <ChartPlaceholder
-          title="Placement Statistics"
-          subtitle="Offer distribution, active drives, and placement conversion overview."
-        />
-      </div>
-
-      <div class="col-12 col-xl-4">
-        <SectionCard title="Recent Activities" subtitle="Latest placement events and updates">
-          <div class="list-group list-group-flush">
-            <div v-for="activity in activities" :key="activity.title" class="list-group-item border-0 px-0">
-              <div class="d-flex justify-content-between gap-3">
-                <div>
-                  <div class="fw-medium">{{ activity.title }}</div>
-                  <small class="text-muted">{{ activity.meta }}</small>
-                </div>
-                <span class="badge rounded-pill" :class="`badge-soft-${activity.tone}`">
-                  {{ activity.tone }}
-                </span>
-              </div>
-            </div>
-            <div v-if="!activities.length" class="text-muted small py-2">No recent activities.</div>
-          </div>
-        </SectionCard>
       </div>
 
       <div class="col-12 col-xl-6">
