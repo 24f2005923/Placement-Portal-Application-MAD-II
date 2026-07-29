@@ -53,6 +53,12 @@ def create_app():
     app.register_blueprint(report_bp)    # POST /api/admin/reports/...
 
     # ── Error handlers ────────────────────────────────────────────
+    from exceptions import PlacementError
+
+    @app.errorhandler(PlacementError)
+    def handle_placement_error(e):
+        return jsonify({'error': e.message}), e.status_code
+
     @app.errorhandler(404)
     def not_found_error(e):
         return jsonify({'error': 'Not found'}), 404
