@@ -1,6 +1,6 @@
-from models import db
+from models import db, DictMixin
 
-class Interview(db.Model):
+class Interview(db.Model, DictMixin):
     __tablename__ = 'interviews'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -15,14 +15,10 @@ class Interview(db.Model):
     application = db.relationship('Application', back_populates='interview')
 
     def to_dict(self):
-        record = {}
-        record['id'] = self.id
-        record['application_id'] = self.application_id
+        fields = [
+            'id', 'application_id', 'interview_time', 'interview_mode',
+            'interview_link', 'round_name', 'remarks'
+        ]
+        record = self.as_dict(fields)
         record['interview_date'] = self.interview_date.isoformat() if self.interview_date else None
-        record['interview_time'] = self.interview_time
-        record['interview_mode'] = self.interview_mode
-        record['interview_link'] = self.interview_link
-        record['round_name'] = self.round_name
-        record['remarks'] = self.remarks
         return record
-

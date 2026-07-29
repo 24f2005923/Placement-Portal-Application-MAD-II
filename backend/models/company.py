@@ -1,6 +1,6 @@
-from models import db
+from models import db, DictMixin
 
-class Company(db.Model):
+class Company(db.Model, DictMixin):
     __tablename__ = 'companies'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -20,34 +20,29 @@ class Company(db.Model):
     user = db.relationship('User', back_populates='company')
     drives = db.relationship('PlacementDrive', back_populates='company', cascade='all, delete-orphan')
 
+    @property
+    def drive_ids(self):
+        return [d.id for d in self.drives]
+
+    @property
+    def is_approved(self):
+        return self.approval_status == 'approved' and not self.blacklisted
+
     def to_dict(self, show_drives=False):
-        data = {}
-        data['id'] = self.id
-        data['user_id'] = self.user_id
-        data['company_name'] = self.company_name
-        data['industry'] = self.industry
-        data['website'] = self.website
-        data['description'] = self.description
-        data['contact_person'] = self.contact_person
-        data['contact_email'] = self.contact_email
-        data['contact_phone'] = self.contact_phone
-        data['city'] = self.city
-        data['address'] = self.address
-        data['approval_status'] = self.approval_status
-        data['blacklisted'] = self.blacklisted
+        fields = [
+            'id', 'user_id', 'company_name', 'industry', 'website', 'description',
+            'contact_person', 'contact_email', 'contact_phone', 'city', 'address',
+            'approval_status', 'blacklisted'
+        ]
+        data = self.as_dict(fields)
         data['drives_count'] = len(self.drives) if self.drives else 0
         
-        # Add basic credentials if linked user exists
         linked_user = self.user
         if linked_user:
             data['email'] = linked_user.email
             data['status'] = linked_user.status
             
         if show_drives:
-            drives_list = []
-            for drive in self.drives:
-                drives_list.append(drive.to_dict())
-            data['drives'] = drives_list
+            data['drives'] = [drive.to_dict() for drive in self.drives]
             
         return data
-
