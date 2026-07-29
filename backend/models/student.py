@@ -1,7 +1,8 @@
 import json
-from models import db
+from models import db, DictMixin
+from utils.placement import profile_completeness
 
-class Student(db.Model):
+class Student(db.Model, DictMixin):
     __tablename__ = 'students'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -25,14 +26,12 @@ class Student(db.Model):
     user = db.relationship('User', back_populates='student')
     applications = db.relationship('Application', back_populates='student', cascade='all, delete-orphan')
 
-    # fetch skills as py list
     def get_skills(self):
         try:
             return json.loads(self.skills or '[]')
         except (TypeError, ValueError):
             return []
 
-    # update skills column from input
     def save_skills(self, input_val):
         if isinstance(input_val, list):
             self.skills = json.dumps(input_val)
@@ -47,26 +46,24 @@ class Student(db.Model):
         else:
             self.skills = '[]'
 
+    @property
+    def completeness(self):
+        return profile_completeness(self)
+
+    @property
+    def drive_ids(self):
+        return [app.drive_id for app in self.applications]
+
     def to_dict(self):
-        profile = {}
-        profile['id'] = self.id
-        profile['user_id'] = self.user_id
-        profile['register_number'] = self.register_number
-        profile['department'] = self.department
-        profile['year'] = self.year
-        profile['cgpa'] = self.cgpa
+        fields = [
+            'id', 'user_id', 'register_number', 'department', 'year', 'cgpa',
+            'phone', 'address', 'resume_path', 'placement_status',
+            'marks_10th', 'marks_12th', 'backlogs', 'graduation_year', 'preferred_role'
+        ]
+        profile = self.as_dict(fields)
         profile['skills'] = self.get_skills()
-        profile['phone'] = self.phone
-        profile['address'] = self.address
-        profile['resume_path'] = self.resume_path
-        profile['placement_status'] = self.placement_status
-        profile['marks_10th'] = self.marks_10th
-        profile['marks_12th'] = self.marks_12th
-        profile['backlogs'] = self.backlogs
-        profile['graduation_year'] = self.graduation_year
-        profile['preferred_role'] = self.preferred_role
+        profile['completeness'] = self.completeness
         
-        # Merge linked User attributes if present
         linked_user = self.user
         if linked_user:
             profile['name'] = linked_user.name
@@ -74,4 +71,3 @@ class Student(db.Model):
             profile['status'] = linked_user.status
             
         return profile
-
