@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from models import db
+from models import db, DictMixin
 
-class Result(db.Model):
+class Result(db.Model, DictMixin):
     __tablename__ = 'results'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -13,11 +13,7 @@ class Result(db.Model):
     application = db.relationship('Application', back_populates='result')
 
     def to_dict(self):
-        res = {}
-        res['id'] = self.id
-        res['application_id'] = self.application_id
-        res['result_status'] = self.result_status
-        res['remarks'] = self.remarks
+        fields = ['id', 'application_id', 'result_status', 'remarks']
+        res = self.as_dict(fields)
         res['published_at'] = self.published_at.strftime('%Y-%m-%d %H:%M') if self.published_at else None
         return res
-
