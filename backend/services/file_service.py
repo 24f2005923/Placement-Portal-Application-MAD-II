@@ -1,54 +1,56 @@
 import os
 import time
+import logging
 from flask import current_app
 
-def is_allowed_file(file_name):
-    # Retrieve permitted list
-    extensions = current_app.config.get('ALLOWED_EXTENSIONS', {'pdf', 'doc', 'docx'})
-    
-    # Split out the file extension
-    base, ext = os.path.splitext(file_name)
-    if not ext:
-        return False
-        
-    cleaned_ext = ext[1:].lower()
-    return cleaned_ext in extensions
+logger = logging.getLogger(__name__)
 
-def save_resume(upload_file, std_id):
-    if upload_file is None or upload_file.filename == '':
+def is_allowed_file(file_name):
+    """Checks if the uploaded file extension is permitted."""
+    allowed_extensions = current_app.config.get('ALLOWED_EXTENSIONS', {'pdf', 'doc', 'docx'})
+    _, file_extension = os.path.splitext(file_name)
+    if not file_extension:
+        return False
+    return file_extension[1:].lower() in allowed_extensions
+
+def save_resume(upload_file, student_id):
+    """
+    Saves an uploaded resume file to the configured uploads folder.
+    Returns: (saved_filename, error_message)
+    """
+    if not upload_file or upload_file.filename == '':
         return None, 'No file selected'
 
     if not is_allowed_file(upload_file.filename):
-        return None, 'Only PDF, DOC, DOCX files are allowed'
+        return None, 'Only PDF, DOC, and DOCX files are allowed'
 
-    # Extract extension
-    _, original_ext = os.path.splitext(upload_file.filename)
-    extension_str = original_ext[1:].lower()
+    _, original_extension = os.path.splitext(upload_file.filename)
+    extension = original_extension[1:].lower()
 
-    # Generate custom timestamp-based filename
-    curr_time_sec = int(time.time())
-    final_filename = f"resume_{std_id}_{curr_time_sec}.{extension_str}"
+    timestamp = int(time.time())
+    new_filename = f"resume_{student_id}_{timestamp}.{extension}"
+    upload_directory = current_app.config['UPLOAD_FOLDER']
 
-    upload_dir_path = current_app.config['UPLOAD_FOLDER']
+    if not os.path.exists(upload_directory):
+        os.makedirs(upload_directory)
 
-    # Create folder if missing
-    if not os.path.exists(upload_dir_path):
-        os.makedirs(upload_dir_path)
+    save_path = os.path.join(upload_directory, new_filename)
+    upload_file.save(save_path)
 
-    full_save_path = os.path.join(upload_dir_path, final_filename)
-    upload_file.save(full_save_path)
+    logger.info(f"Resume stored successfully: {new_filename}")
+    return new_filename, None
 
-    print(f"File stored: {final_filename}")
-
-    return final_filename, None
-
-def delete_resume(file_name):
-    if not file_name:
+def delete_resume(filename):
+    """Deletes a resume file if it exists."""
+    if not filename:
         return
         
-    upload_dir_path = current_app.config['UPLOAD_FOLDER']
-    target_path = os.path.join(upload_dir_path, file_name)
+    upload_directory = current_app.config['UPLOAD_FOLDER']
+    target_path = os.path.join(upload_directory, filename)
     
     if os.path.exists(target_path):
-        os.remove(target_path)
-
+        try:
+            os.remove(target_path)
+            logger.info(f"Resume deleted: {filename}")
+        except Exception as e:
+            logger.error(f"Failed to delete resume {filename}: {e}")
