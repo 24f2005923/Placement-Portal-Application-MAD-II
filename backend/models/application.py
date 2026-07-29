@@ -1,13 +1,29 @@
 from datetime import datetime, timezone
-from models import db
+from models import db, DictMixin
 
-class Application(db.Model):
+STAGE_MAP = {
+    'applied': 'Screening',
+    'shortlisted': 'HR Round',
+    'interview': 'Technical',
+    'selected': 'Selected',
+    'rejected': 'Rejected'
+}
+
+PROGRESS_MAP = {
+    'applied': 20,
+    'shortlisted': 45,
+    'interview': 70,
+    'selected': 100,
+    'rejected': 0
+}
+
+class Application(db.Model, DictMixin):
     __tablename__ = 'applications'
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     drive_id = db.Column(db.Integer, db.ForeignKey('placement_drives.id'), nullable=False)
-    application_status = db.Column(db.String(30), default='applied') # applied, shortlisted, interview, selected, rejected
+    application_status = db.Column(db.String(30), default='applied')
     cover_note = db.Column(db.Text)
     applied_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -21,47 +37,28 @@ class Application(db.Model):
     )
 
     def to_dict(self, include_student=True, include_drive=True):
-        # Progress maps
-        stages = {
-            'applied': 'Screening',
-            'shortlisted': 'HR Round',
-            'interview': 'Technical',
-            'selected': 'Selected',
-            'rejected': 'Rejected'
-        }
-        progress_levels = {
-            'applied': 20,
-            'shortlisted': 45,
-            'interview': 70,
-            'selected': 100,
-            'rejected': 0
-        }
-
-        dict_out = {}
-        dict_out['id'] = self.id
-        dict_out['student_id'] = self.student_id
-        dict_out['drive_id'] = self.drive_id
-        dict_out['application_status'] = self.application_status
-        dict_out['cover_note'] = self.cover_note
+        fields = ['id', 'student_id', 'drive_id', 'application_status', 'cover_note']
+        dict_out = self.as_dict(fields)
         dict_out['applied_at'] = self.applied_at.strftime('%Y-%m-%d %H:%M') if self.applied_at else None
-        dict_out['stage'] = stages.get(self.application_status, 'Screening')
-        dict_out['progress'] = progress_levels.get(self.application_status, 20)
+        dict_out['stage'] = STAGE_MAP.get(self.application_status, 'Screening')
+        dict_out['progress'] = PROGRESS_MAP.get(self.application_status, 20)
 
-        # Merge student properties
         linked_student = self.student
         if include_student and linked_student:
-            dict_out['student_name'] = linked_student.user.name if linked_student.user else ''
+            linked_user = linked_student.user
+            dict_out['student_name'] = linked_user.name if linked_user else ''
             dict_out['student_register_number'] = linked_student.register_number
             dict_out['student_department'] = linked_student.department
             dict_out['student_cgpa'] = linked_student.cgpa
 
-        # Merge drive properties
         linked_drive = self.drive
         if include_drive and linked_drive:
             dict_out['drive_title'] = linked_drive.title
             dict_out['drive_role'] = linked_drive.job_role
             dict_out['drive_package'] = linked_drive.package
-            dict_out['company_name'] = linked_drive.company.company_name if linked_drive.company else ''
+            
+            linked_company = linked_drive.company
+            dict_out['company_name'] = linked_company.company_name if linked_company else ''
 
         if self.interview:
             dict_out['interview'] = self.interview.to_dict()
@@ -70,4 +67,3 @@ class Application(db.Model):
             dict_out['result'] = self.result.to_dict()
 
         return dict_out
-
