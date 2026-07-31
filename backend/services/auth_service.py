@@ -73,12 +73,12 @@ class AuthService:
 
         if not matched_user:
             logger.warning(f"No account matching identifier: {clean_identifier}")
-            raise ValidationError("Invalid credentials. Account not found.")
+            raise ValidationError("Invalid credentials")
 
         # Password verification
         if not matched_user.check_password(password):
             logger.warning(f"Incorrect password for User ID: {matched_user.id}")
-            raise ValidationError("Invalid credentials. Password incorrect.")
+            raise ValidationError("Invalid credentials")
 
         # Account active status check
         if matched_user.status == 'inactive':
