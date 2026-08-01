@@ -17,6 +17,25 @@
           <p class="small mt-2 mb-0">{{ drive.eligibility }}</p>
         </div>
         <form class="row g-3" @submit.prevent="handleApply">
+          <div class="col-12">
+            <label class="form-label">Resume Upload</label>
+            <div v-if="profileResume" class="alert alert-light border mb-2 d-flex align-items-center justify-content-between">
+              <div>
+                <i class="bi bi-file-earmark-pdf text-primary me-2 fs-5"></i>
+                <span class="small">Default Profile Resume: <strong>{{ profileResume }}</strong></span>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary" @click="openResume(profileResume)">View</button>
+            </div>
+            <input type="file" accept=".pdf,.doc,.docx" class="form-control" @change="onFileChange" />
+            <div class="form-text">
+              <span v-if="resumeFile" class="text-success fw-medium">
+                <i class="bi bi-check-circle me-1"></i>New resume selected: {{ resumeFile.name }}
+              </span>
+              <span v-else class="text-muted">
+                Select a file to attach a specific resume for this application, or leave blank to submit your default profile resume.
+              </span>
+            </div>
+          </div>
           <div class="col-12"><label class="form-label">Cover Note (optional)</label><textarea v-model="coverNote" class="form-control" rows="4" placeholder="Briefly describe why you're a great fit..."></textarea></div>
           <div class="col-12 d-grid">
             <button class="btn btn-primary" :disabled="submitting">
@@ -35,21 +54,28 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { studentAPI } from '@/api/student'
+import { openResume } from '@/utils/resume'
 
 const route = useRoute()
 const router = useRouter()
 const drive = ref(null)
 const coverNote = ref('')
+const resumeFile = ref(null)
+const profileResume = ref('')
 const loading = ref(true)
 const submitting = ref(false)
 const error = ref('')
 const success = ref('')
 
+function onFileChange(e) {
+  resumeFile.value = e.target.files[0] || null
+}
+
 async function handleApply() {
   submitting.value = true
   error.value = ''
   try {
-    await studentAPI.applyForDrive(drive.value.id, coverNote.value)
+    await studentAPI.applyForDrive(drive.value.id, coverNote.value, resumeFile.value)
     success.value = 'Application submitted successfully!'
     setTimeout(() => router.push('/student/applications'), 1500)
   } catch (err) {
@@ -61,8 +87,12 @@ async function handleApply() {
 
 onMounted(async () => {
   try {
-    const { data } = await studentAPI.getDrive(route.params.id)
-    drive.value = data.drive
+    const [driveRes, profileRes] = await Promise.all([
+      studentAPI.getDrive(route.params.id),
+      studentAPI.getProfile()
+    ])
+    drive.value = driveRes.data.drive
+    profileResume.value = profileRes.data.student?.resume_path || ''
   } catch (err) {
     error.value = 'Failed to load drive details.'
   } finally {
