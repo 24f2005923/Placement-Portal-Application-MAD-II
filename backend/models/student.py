@@ -63,6 +63,7 @@ class Student(db.Model, DictMixin):
         profile = self.as_dict(fields)
         profile['skills'] = self.get_skills()
         profile['completeness'] = self.completeness
+        profile['resume_url'] = f"/api/student/resume/{self.resume_path}" if self.resume_path else None
         
         linked_user = self.user
         if linked_user:
