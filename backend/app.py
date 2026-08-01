@@ -85,6 +85,12 @@ def create_app():
     # ── Create tables and seed admin user ─────────────────────────
     with app.app_context():
         db.create_all()
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("ALTER TABLE applications ADD COLUMN resume_path VARCHAR(256)"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         seed_admin()
 
     return app
