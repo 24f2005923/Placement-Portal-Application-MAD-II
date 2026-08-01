@@ -29,7 +29,16 @@ export const studentAPI = {
     return httpClient.get('/api/student/drives/' + driveId)
   },
 
-  applyForDrive: function (driveId, coverNote) {
+  applyForDrive: function (driveId, coverNote, resumeFile) {
+    if (resumeFile) {
+      const formData = new FormData()
+      formData.append('drive_id', driveId)
+      if (coverNote) formData.append('cover_note', coverNote)
+      formData.append('resume', resumeFile)
+      return httpClient.post('/api/student/applications', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    }
     return httpClient.post('/api/student/applications', {
       drive_id: driveId,
       cover_note: coverNote || ''
