@@ -25,6 +25,7 @@ class Application(db.Model, DictMixin):
     drive_id = db.Column(db.Integer, db.ForeignKey('placement_drives.id'), nullable=False)
     application_status = db.Column(db.String(30), default='applied')
     cover_note = db.Column(db.Text)
+    resume_path = db.Column(db.String(256))
     applied_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     student = db.relationship('Student', back_populates='applications')
@@ -44,12 +45,18 @@ class Application(db.Model, DictMixin):
         dict_out['progress'] = PROGRESS_MAP.get(self.application_status, 20)
 
         linked_student = self.student
+        effective_resume = self.resume_path or (linked_student.resume_path if linked_student else None)
+        dict_out['resume_path'] = effective_resume
+        dict_out['resume_url'] = f"/api/student/resume/{effective_resume}" if effective_resume else None
+
         if include_student and linked_student:
             linked_user = linked_student.user
             dict_out['student_name'] = linked_user.name if linked_user else ''
             dict_out['student_register_number'] = linked_student.register_number
             dict_out['student_department'] = linked_student.department
             dict_out['student_cgpa'] = linked_student.cgpa
+            dict_out['student_resume_path'] = effective_resume
+            dict_out['student_resume_url'] = dict_out['resume_url']
 
         linked_drive = self.drive
         if include_drive and linked_drive:
