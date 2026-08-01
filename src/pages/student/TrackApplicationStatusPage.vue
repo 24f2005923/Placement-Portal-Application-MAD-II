@@ -9,6 +9,7 @@
           <tr>
             <th>Drive</th>
             <th>Company</th>
+            <th>Resume</th>
             <th>Status</th>
             <th>Stage</th>
             <th>Progress</th>
@@ -18,6 +19,12 @@
           <tr v-for="app in applications" :key="app.id">
             <td>{{ app.drive_title }}</td>
             <td>{{ app.company_name }}</td>
+            <td>
+              <button v-if="app.resume_path" class="btn btn-sm btn-outline-info" @click="openResume(app.resume_path)">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Resume
+              </button>
+              <span v-else class="text-muted small">No Resume</span>
+            </td>
             <td>
               <span class="badge rounded-pill"
                 :class="app.application_status === 'selected' ? 'badge-soft-success' : app.application_status === 'rejected' ? 'badge-soft-danger' : app.application_status === 'interview' ? 'badge-soft-warning' : 'badge-soft-primary'">
@@ -33,7 +40,7 @@
             </td>
           </tr>
           <tr v-if="!applications.length">
-            <td colspan="5" class="text-center text-muted py-4">No applications yet.</td>
+            <td colspan="6" class="text-center text-muted py-4">No applications yet.</td>
           </tr>
         </tbody>
       </table>
@@ -44,6 +51,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { studentAPI } from '@/api/student'
+import { openResume } from '@/utils/resume'
 
 const applications = ref([])
 const loading = ref(true)
