@@ -52,6 +52,7 @@ const routes = [
       { path: '', redirect: 'dashboard' },
       { path: 'dashboard', component: () => import('@/pages/company/CompanyDashboard.vue') },
       { path: 'profile', component: () => import('@/pages/company/CompanyProfilePage.vue') },
+      { path: 'drives', redirect: 'drives/create' },
       { path: 'drives/create', component: () => import('@/pages/company/CreatePlacementDrivePage.vue') },
       { path: 'drives/:id/edit', component: () => import('@/pages/company/EditPlacementDrivePage.vue') },
       { path: 'applications', component: () => import('@/pages/company/ViewApplicationsPage.vue') },
