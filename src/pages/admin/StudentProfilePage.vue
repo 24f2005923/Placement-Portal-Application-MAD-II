@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import SectionCard from '@/components/common/SectionCard.vue'
 import AlertMessage from '@/components/common/AlertMessage.vue'
 import { adminAPI } from '@/api/admin'
+import { openResume } from '@/utils/resume'
 
 const route = useRoute()
 const student = ref(null)
@@ -89,7 +90,10 @@ onMounted(async () => {
           <SectionCard title="Resume" subtitle="Latest uploaded resume">
             <div class="border border-dashed rounded-4 p-4 text-center">
               <i class="bi bi-file-earmark-pdf fs-1 text-primary"></i>
-              <p class="mb-1 fw-medium mt-2">{{ student.resume_path || 'No resume uploaded' }}</p>
+              <p class="mb-2 fw-medium mt-2">{{ student.resume_path || 'No resume uploaded' }}</p>
+              <button v-if="student.resume_path" class="btn btn-sm btn-primary" @click="openResume(student.resume_path)">
+                <i class="bi bi-download me-1"></i>View / Download Resume
+              </button>
             </div>
           </SectionCard>
         </div>

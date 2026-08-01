@@ -119,7 +119,7 @@ class StudentService:
         return drive_dict
 
     @classmethod
-    def apply_for_drive(cls, user_id, drive_id, cover_note):
+    def apply_for_drive(cls, user_id, drive_id, cover_note, resume_file=None):
         student = cls.get_student_by_user(user_id)
         drive = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
         if not drive:
@@ -136,10 +136,18 @@ class StudentService:
         if duplicate_app:
             raise Conflict('You already applied for this drive')
 
+        saved_resume = None
+        if resume_file:
+            saved_resume, error_msg = save_resume(resume_file, student.id)
+            if error_msg:
+                raise ValidationError(error_msg)
+            student.resume_path = saved_resume
+
         new_app = Application(
             student_id=student.id,
             drive_id=drive_id,
             cover_note=cover_note,
+            resume_path=saved_resume or student.resume_path,
             application_status='applied'
         )
         db.session.add(new_app)
