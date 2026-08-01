@@ -11,11 +11,16 @@
             <div>
               <div class="fw-semibold">{{ app.student_name }}</div>
               <small class="text-muted">{{ app.drive_title }}</small>
-              <div class="mt-1">
+              <div class="mt-2 d-flex align-items-center gap-2">
                 <span class="badge rounded-pill"
                   :class="app.application_status === 'shortlisted' ? 'badge-soft-success' : 'badge-soft-primary'">
                   {{ app.application_status }}
                 </span>
+                <button v-if="app.resume_path || app.student_resume_path"
+                  class="btn btn-sm btn-outline-info py-0 px-2"
+                  @click="openResume(app.resume_path || app.student_resume_path)">
+                  <i class="bi bi-file-earmark-pdf me-1"></i>Resume
+                </button>
               </div>
             </div>
             <button class="btn btn-sm btn-outline-primary"
@@ -34,6 +39,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { companyAPI } from '@/api/company'
+import { openResume } from '@/utils/resume'
 
 const applications = ref([])
 const loading = ref(false)
