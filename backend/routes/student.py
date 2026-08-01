@@ -54,8 +54,23 @@ def upload_resume():
     }), 200
 
 @student_bp.route('/resume/<filename>', methods=['GET'])
-@student_required
 def get_resume(filename):
+    token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+    elif 'token' in request.args:
+        token = request.args.get('token')
+
+    if token:
+        try:
+            from flask_jwt_extended import decode_token
+            decode_token(token)
+        except Exception:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+    else:
+        return jsonify({'error': 'Missing authorization token'}), 401
+
     from flask import current_app
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
 
@@ -82,14 +97,25 @@ def get_drive_details(drive_id):
 @student_required
 def apply_for_drive():
     uid = get_jwt_identity()
-    payload = request.get_json() or {}
-    drive_id = payload.get('drive_id')
-    cover_note = payload.get('cover_note')
+    resume_file = None
+    if request.is_json:
+        payload = request.get_json() or {}
+        drive_id = payload.get('drive_id')
+        cover_note = payload.get('cover_note')
+    else:
+        drive_id = request.form.get('drive_id')
+        cover_note = request.form.get('cover_note')
+        resume_file = request.files.get('resume')
     
-    app = StudentService.apply_for_drive(uid, drive_id, cover_note)
+    if not drive_id:
+        return jsonify({'error': 'drive_id is required'}), 400
+
+    app = StudentService.apply_for_drive(uid, int(drive_id), cover_note, resume_file=resume_file)
     
     cache.delete(f'student:stats:{uid}')
     cache.delete_pattern(f'student:drives:{uid}:*')
+    cache.delete_pattern('company:applications:*')
+    cache.delete_pattern('company:drives:*')
     cache.delete('admin:stats')
     cache.delete('admin:activities')
     
