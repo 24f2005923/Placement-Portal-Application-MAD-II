@@ -18,8 +18,14 @@
       <small class="text-muted">PDF, DOC, DOCX supported (max 5 MB)</small>
       <input ref="fileInput" type="file" accept=".pdf,.doc,.docx" class="d-none" @change="onFileChange" />
     </div>
-    <div v-if="currentResume" class="mb-3 small text-muted">
-      Current resume: <strong>{{ currentResume }}</strong>
+    <div v-if="currentResume" class="mb-3 p-3 bg-light rounded-3 d-flex align-items-center justify-content-between">
+      <div class="small">
+        <i class="bi bi-file-earmark-pdf text-primary me-2 fs-5"></i>
+        Current Profile Resume: <strong>{{ currentResume }}</strong>
+      </div>
+      <button class="btn btn-sm btn-outline-primary" @click="openResume(currentResume)">
+        <i class="bi bi-eye me-1"></i>View Resume
+      </button>
     </div>
     <button class="btn btn-primary" :disabled="!selectedFile || uploading" @click="handleUpload">
       <span v-if="uploading" class="spinner-border spinner-border-sm me-2"></span>
@@ -31,6 +37,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { studentAPI } from '@/api/student'
+import { openResume } from '@/utils/resume'
 
 const selectedFile = ref(null)
 const uploading = ref(false)
