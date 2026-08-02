@@ -77,7 +77,7 @@ def get_resume(filename):
 @student_bp.route('/drives', methods=['GET'])
 @student_required
 @cache_response(
-    lambda: f"student:drives:{get_jwt_identity()}:{request.args.get('search','').strip()}",
+    lambda: f"student:drives:{get_jwt_identity()}:{request.args.get('search','').strip().lower()}",
     ttl=120
 )
 def list_open_drives():
@@ -130,6 +130,17 @@ def get_my_applications():
     uid = get_jwt_identity()
     apps = StudentService.get_my_applications(uid)
     return jsonify({'applications': apps}), 200
+
+@student_bp.route('/applications/<int:app_id>/offer-letter', methods=['GET'])
+@student_required
+def download_offer_letter(app_id):
+    from flask import Response
+    uid = get_jwt_identity()
+    html_doc, filename = StudentService.generate_offer_letter(uid, app_id)
+    
+    response = Response(html_doc, mimetype='text/html')
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 @student_bp.route('/interviews', methods=['GET'])
 @student_required

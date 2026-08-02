@@ -20,30 +20,39 @@ def get_recent_activities():
     activities_log = AdminService.get_recent_activities()
     return jsonify({'activities': activities_log}), 200
 
-@admin_bp.route('/reports/stats', methods=['GET'])
+@admin_bp.route('/applications', methods=['GET'])
 @admin_required
-@cache_response(lambda: 'admin:report_stats', ttl=600)
-def get_report_stats():
-    report_metrics = AdminService.get_report_stats()
-    return jsonify({'stats': report_metrics}), 200
+@cache_response(
+    lambda: f"admin:applications:{request.args.get('search','').strip().lower()}:{request.args.get('status','').strip().lower()}:{request.args.get('page',1)}",
+    ttl=120
+)
+def get_all_applications():
+    search_term = request.args.get('search', '').strip()
+    status_filter = request.args.get('status', '').strip()
+    page_num = int(request.args.get('page', 1))
+    records_per_page = int(request.args.get('per_page', 20))
+    
+    result = AdminService.get_applications(search_term, status_filter, page_num, records_per_page)
+    return jsonify(result), 200
 
-@admin_bp.route('/settings', methods=['GET'])
+@admin_bp.route('/applications/<int:app_id>/status', methods=['PUT'])
 @admin_required
-def get_settings():
-    settings = AdminService.get_settings()
-    return jsonify({'settings': settings}), 200
-
-@admin_bp.route('/settings', methods=['PUT'])
-@admin_required
-def update_settings():
-    payload = request.get_json()
-    settings = AdminService.update_settings(payload)
-    return jsonify({'message': 'Settings updated', 'settings': settings}), 200
+def update_application_status(app_id):
+    payload = request.get_json() or {}
+    new_status = payload.get('status')
+    
+    app_dict = AdminService.update_application_status(app_id, new_status)
+    
+    cache.delete_pattern('admin:applications:*')
+    cache.delete('admin:stats')
+    cache.delete('admin:activities')
+    
+    return jsonify({'message': f"Application status updated to {new_status}", 'application': app_dict}), 200
 
 @admin_bp.route('/students', methods=['GET'])
 @admin_required
 @cache_response(
-    lambda: f"admin:students:{request.args.get('search','').strip()}:{request.args.get('status','')}:{request.args.get('page',1)}",
+    lambda: f"admin:students:{request.args.get('search','').strip().lower()}:{request.args.get('status','').strip().lower()}:{request.args.get('page',1)}",
     ttl=180
 )
 def get_all_students():
@@ -90,7 +99,7 @@ def change_student_status(student_id):
 @admin_bp.route('/companies', methods=['GET'])
 @admin_required
 @cache_response(
-    lambda: f"admin:companies:{request.args.get('search','').strip()}:{request.args.get('status','')}:{request.args.get('page',1)}",
+    lambda: f"admin:companies:{request.args.get('search','').strip().lower()}:{request.args.get('status','').strip().lower()}:{request.args.get('page',1)}",
     ttl=180
 )
 def get_all_companies():
@@ -117,8 +126,9 @@ def approve_company(company_id):
     cache.delete_pattern('admin:companies:*')
     cache.delete(f'admin:company:{company_id}')
     cache.delete('admin:stats')
+    cache.delete('admin:activities')
     
-    return jsonify({'message': 'Company approved successfully'}), 200
+    return jsonify({'message': 'Company approved'}), 200
 
 @admin_bp.route('/companies/<int:company_id>/reject', methods=['PUT'])
 @admin_required
@@ -127,6 +137,8 @@ def reject_company(company_id):
     
     cache.delete_pattern('admin:companies:*')
     cache.delete(f'admin:company:{company_id}')
+    cache.delete('admin:stats')
+    cache.delete('admin:activities')
     
     return jsonify({'message': 'Company rejected'}), 200
 
@@ -134,29 +146,30 @@ def reject_company(company_id):
 @admin_required
 def blacklist_company(company_id):
     payload = request.get_json() or {}
-    blacklisted = payload.get('blacklisted', True)
+    flag = payload.get('blacklisted', True)
     
-    AdminService.blacklist_company(company_id, blacklisted)
+    AdminService.update_company_blacklist(company_id, flag)
     
     cache.delete_pattern('admin:companies:*')
     cache.delete(f'admin:company:{company_id}')
     cache.delete('admin:stats')
     
-    msg = 'Company has been blacklisted' if blacklisted else 'Company removed from blacklist'
-    return jsonify({'message': msg}), 200
+    status_str = 'blacklisted' if flag else 'unblacklisted'
+    return jsonify({'message': f"Company {status_str}"}), 200
 
 @admin_bp.route('/drives', methods=['GET'])
 @admin_required
 @cache_response(
-    lambda: f"admin:drives:{request.args.get('status','')}:{request.args.get('page',1)}",
+    lambda: f"admin:drives:{request.args.get('search','').strip().lower()}:{request.args.get('status','').strip().lower()}:{request.args.get('page',1)}",
     ttl=180
 )
 def get_all_drives():
+    search_term = request.args.get('search', '').strip()
     status_filter = request.args.get('status', '').strip()
     page_num = int(request.args.get('page', 1))
     records_per_page = int(request.args.get('per_page', 20))
     
-    result = AdminService.get_drives(status_filter, page_num, records_per_page)
+    result = AdminService.get_drives(search_term, status_filter, page_num, records_per_page)
     return jsonify(result), 200
 
 @admin_bp.route('/drives/<int:drive_id>', methods=['GET'])
@@ -187,6 +200,18 @@ def reject_drive(drive_id):
     cache.delete(f'admin:drive:{drive_id}')
     
     return jsonify({'message': 'Drive rejected'}), 200
+
+@admin_bp.route('/drives/<int:drive_id>/close', methods=['PUT'])
+@admin_required
+def close_drive(drive_id):
+    AdminService.update_drive_status(drive_id, 'closed')
+    
+    cache.delete_pattern('admin:drives:*')
+    cache.delete(f'admin:drive:{drive_id}')
+    cache.delete('admin:stats')
+    cache.delete('admin:activities')
+    
+    return jsonify({'message': 'Placement drive closed successfully'}), 200
 
 @admin_bp.route('/drives/<int:drive_id>/status', methods=['PUT'])
 @admin_required

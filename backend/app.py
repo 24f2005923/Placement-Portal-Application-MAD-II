@@ -13,12 +13,8 @@ from models.application import Application
 from models.interview import Interview
 from models.result import Result
 
-from routes.auth import auth_bp
-from routes.admin import admin_bp
-from routes.company import company_bp
-from routes.student import student_bp
-from routes.exports import export_bp      # async CSV export routes
-from routes.reports import report_bp      # async report generation routes
+# Blueprint imports are deferred inside create_app() so that import
+# failures produce a clear ImportError (not a NameError at registration).
 
 from database.seed import seed_admin
 
@@ -45,12 +41,19 @@ def create_app():
     JWTManager(app)
 
     # ── Register blueprints (all API routes) ──────────────────────
+    from routes.auth import auth_bp
+    from routes.admin import admin_bp
+    from routes.company import company_bp
+    from routes.student import student_bp
+    from routes.exports import export_bp    # POST /api/admin/export/...
+    from routes.reports import report_bp    # POST /api/admin/reports/...
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(company_bp)
     app.register_blueprint(student_bp)
-    app.register_blueprint(export_bp)    # POST /api/admin/export/...
-    app.register_blueprint(report_bp)    # POST /api/admin/reports/...
+    app.register_blueprint(export_bp)
+    app.register_blueprint(report_bp)
 
     # ── Error handlers ────────────────────────────────────────────
     from exceptions import PlacementError

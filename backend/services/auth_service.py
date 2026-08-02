@@ -6,6 +6,7 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 from exceptions import Forbidden, ValidationError, NotFound, Conflict
+from utils.validators import validate_phone, validate_email, validate_password
 
 logger = logging.getLogger('auth_service')
 if not logger.handlers:
@@ -123,24 +124,25 @@ class AuthService:
     def register_student(cls, payload):
         """Validates payload and registers a new student user and profile."""
         required = ['name', 'email', 'password', 'register_number', 'department']
-        missing = [key for key in required if not payload.get(key)]
+        missing = [key for key in required if not payload.get(key) or not str(payload.get(key)).strip()]
         if missing:
             raise ValidationError(f"Missing required fields: {', '.join(missing)}")
 
-        target_email = payload['email'].strip().lower()
+        target_email = validate_email(payload['email'])
+        validated_pwd = validate_password(payload['password'])
 
         email_exists = db.session.query(User).filter(User.email == target_email).first()
         if email_exists:
             raise Conflict('This email is already registered')
 
-        reg_number = payload['register_number']
+        reg_number = payload['register_number'].strip()
         reg_exists = db.session.query(Student).filter(Student.register_number == reg_number).first()
         if reg_exists:
             raise Conflict('This register number already exists')
 
         # Build user
         user = User(name=payload['name'], email=target_email, role='student')
-        user.set_password(payload['password'])
+        user.set_password(validated_pwd)
         db.session.add(user)
         db.session.flush()
 
@@ -166,19 +168,21 @@ class AuthService:
     @classmethod
     def register_company(cls, payload):
         """Validates payload and registers a new company user and profile."""
-        required = ['company_name', 'email', 'password']
-        missing = [key for key in required if not payload.get(key)]
+        required = ['company_name', 'email', 'password', 'phone']
+        missing = [key for key in required if not payload.get(key) or not str(payload.get(key)).strip()]
         if missing:
             raise ValidationError(f"Missing required fields: {', '.join(missing)}")
 
-        target_email = payload['email'].strip().lower()
+        target_email = validate_email(payload['email'])
+        clean_phone = validate_phone(payload['phone'], field_name="Phone number")
+        validated_pwd = validate_password(payload['password'])
 
         email_exists = db.session.query(User).filter(User.email == target_email).first()
         if email_exists:
             raise Conflict('This email is already registered')
 
         user = User(name=payload['company_name'], email=target_email, role='company')
-        user.set_password(payload['password'])
+        user.set_password(validated_pwd)
         db.session.add(user)
         db.session.flush()
 
@@ -187,7 +191,7 @@ class AuthService:
             company_name=payload['company_name'],
             industry=payload.get('industry'),
             contact_email=payload.get('contact_email', target_email),
-            contact_phone=payload.get('phone'),
+            contact_phone=clean_phone,
             address=payload.get('address'),
             city=payload.get('city'),
             approval_status='pending'

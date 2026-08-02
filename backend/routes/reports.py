@@ -1,176 +1,113 @@
 """
 reports.py — Admin placement report API routes
-────────────────────────────────────────────────
-Provides endpoints for admins to trigger the monthly placement
-report generation task and download the output files.
+─────────────────────────────────────────────────
+Provides endpoints for live analytics, queuing/checking report generation
+tasks, listing available reports, and downloading them.
 
-Endpoints:
-  POST /api/admin/reports/generate              — queue report generation
-  GET  /api/admin/reports/status/<task_id>      — check task progress
-  GET  /api/admin/reports/download/<path:fname> — download HTML or PDF
-  GET  /api/admin/reports/list                  — list available reports
+All analytics values are computed from live database records by
+AdminService — no hardcoded, mocked, or seeded data exists here.
 """
 
 import os
-import logging
-from datetime import datetime
-from flask import Blueprint, jsonify, request, send_from_directory
-
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from middleware.auth_middleware import admin_required
-
-logger = logging.getLogger(__name__)
+from services.admin_service import AdminService
+from cache.decorators import cache_response
 
 report_bp = Blueprint('report_routes', __name__, url_prefix='/api/admin/reports')
 
 
+@report_bp.route('/analytics', methods=['GET'])
+@admin_required
+@cache_response(lambda: 'reports:analytics', ttl=300)
+def get_placement_analytics():
+    """
+    Return live placement analytics computed from the database.
+    Includes student placement rates, drive counts, application funnel
+    percentages, and department-wise breakdowns.  Returns zeros when
+    no records exist — never returns fabricated values.
+    """
+    analytics = AdminService.get_report_analytics()
+    return jsonify({'analytics': analytics}), 200
+
+
+@report_bp.route('/companies/top', methods=['GET'])
+@admin_required
+@cache_response(lambda: 'reports:companies:top', ttl=300)
+def get_top_hiring_companies():
+    """
+    Return approved companies ranked by confirmed student selections.
+    Uses a single aggregated DB query — no per-row sub-queries.
+    Returns an empty list when no approved company data exists.
+    """
+    limit = min(int(request.args.get('limit', 10)), 50)
+    companies = AdminService.get_top_companies(limit=limit)
+    return jsonify({'companies': companies}), 200
+
+
 @report_bp.route('/generate', methods=['POST'])
 @admin_required
-def trigger_report_generation():
-    """
-    Queue an asynchronous monthly placement report generation task.
-
-    Request body (JSON, optional):
-        month — Target month in 'YYYY-MM' format.
-                Defaults to the previous calendar month.
-
-    Response:
-        202 — { task_id, message, status_url, month }
-    """
+def generate_report():
+    """Queue asynchronous monthly placement report generation task."""
     from tasks.monthly_reports import generate_monthly_report
 
-    payload      = request.get_json(silent=True) or {}
-    target_month = payload.get('month')    # e.g. "2026-06"
+    payload = request.get_json() or {}
+    year  = payload.get('year')
+    month = payload.get('month')
 
-    # Validate the month format if provided
-    if target_month:
-        try:
-            datetime.strptime(target_month, '%Y-%m')
-        except ValueError:
-            return jsonify({'error': "Invalid month format. Use 'YYYY-MM' (e.g. '2026-06')"}), 400
-
-    task = generate_monthly_report.delay(target_month=target_month)
-
-    logger.info('Report generation queued: task_id=%s, month=%s', task.id, target_month or 'previous')
+    task = generate_monthly_report.delay(target_year=year, target_month=month)
 
     return jsonify({
-        'message':    'Report generation job has been queued.',
-        'task_id':    task.id,
-        'month':      target_month or 'previous month',
-        'status_url': f'/api/admin/reports/status/{task.id}',
+        'message': 'Monthly placement report generation task queued',
+        'task_id': task.id,
+        'status_url': f'/api/admin/reports/status/{task.id}'
     }), 202
 
 
 @report_bp.route('/status/<task_id>', methods=['GET'])
 @admin_required
 def get_report_status(task_id):
-    """
-    Check the status of a report generation task.
-
-    Response:
-        200 — { task_id, state, result | error, download_urls? }
-    """
+    """Check status of an asynchronous report generation task."""
     from celery_app import celery
 
-    task_result = celery.AsyncResult(task_id)
-    state       = task_result.state
-
-    response = {
-        'task_id': task_id,
-        'state':   state,
-    }
-
-    if state == 'SUCCESS':
-        result = task_result.result or {}
-        response['result'] = result
-
-        # Provide download links for both HTML and PDF
-        month_label = result.get('month', '')
-        response['download_urls'] = {
-            'html': f"/api/admin/reports/download/{result.get('html_path', '')}",
-            'pdf':  f"/api/admin/reports/download/{result.get('pdf_path', '')}",
-        }
-
-    elif state == 'FAILURE':
-        response['error'] = str(task_result.result)
-
-    return jsonify(response), 200
-
-
-@report_bp.route('/download/<path:filepath>', methods=['GET'])
-@admin_required
-def download_report_file(filepath):
-    """
-    Download a generated report file (HTML or PDF).
-
-    The filepath is the absolute path returned in the task result.
-    For security, only files within backend/reports/ are served.
-
-    Response:
-        200 — File download
-        403 — Attempt to access outside reports directory
-        404 — File not found
-    """
-    from flask import current_app
-
-    reports_base = current_app.config['REPORTS_FOLDER']
-
-    # Security: resolve the absolute path and verify it's in reports dir
-    abs_path = os.path.abspath(filepath)
-    if not abs_path.startswith(os.path.abspath(reports_base)):
-        logger.warning('Report download blocked — path traversal attempt: %s', filepath)
-        return jsonify({'error': 'Access denied.'}), 403
-
-    if not os.path.isfile(abs_path):
-        return jsonify({'error': 'Report file not found.'}), 404
-
-    directory = os.path.dirname(abs_path)
-    filename  = os.path.basename(abs_path)
-
-    logger.info('Admin downloading report: %s', filename)
-    return send_from_directory(directory, filename, as_attachment=True)
+    res = celery.AsyncResult(task_id)
+    if res.state == 'PENDING':
+        return jsonify({'state': 'PENDING', 'status': 'Task queued / processing...'}), 200
+    elif res.state == 'SUCCESS':
+        return jsonify({'state': 'SUCCESS', 'result': res.result}), 200
+    elif res.state == 'FAILURE':
+        return jsonify({'state': 'FAILURE', 'error': str(res.result)}), 500
+    else:
+        return jsonify({'state': res.state}), 200
 
 
 @report_bp.route('/list', methods=['GET'])
 @admin_required
 def list_reports():
-    """
-    List all generated monthly reports, grouped by month.
-
-    Response:
-        200 — { reports: [{ month, html, pdf, created_at }] }
-    """
-    from flask import current_app
-
+    """List all available generated monthly reports in REPORTS_FOLDER."""
     reports_base = current_app.config['REPORTS_FOLDER']
-
-    if not os.path.isdir(reports_base):
+    if not os.path.exists(reports_base):
         return jsonify({'reports': []}), 200
 
     reports = []
-    for month_folder in sorted(os.listdir(reports_base), reverse=True):
-        month_path = os.path.join(reports_base, month_folder)
-        if not os.path.isdir(month_path):
-            continue
-
-        html_path = os.path.join(month_path, 'placement_report.html')
-        pdf_path  = os.path.join(month_path, 'placement_report.pdf')
-
-        html_exists = os.path.isfile(html_path)
-        pdf_exists  = os.path.isfile(pdf_path)
-
-        if not html_exists and not pdf_exists:
-            continue
-
-        created_at = ''
-        if html_exists:
-            ts = os.path.getmtime(html_path)
-            created_at = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')
-
-        reports.append({
-            'month':      month_folder,
-            'html_url':   f'/api/admin/reports/download/{html_path}' if html_exists else None,
-            'pdf_url':    f'/api/admin/reports/download/{pdf_path}' if pdf_exists else None,
-            'created_at': created_at,
-        })
+    for month_dir in sorted(os.listdir(reports_base), reverse=True):
+        full_dir = os.path.join(reports_base, month_dir)
+        if os.path.isdir(full_dir):
+            html_file = os.path.join(full_dir, 'report.html')
+            if os.path.exists(html_file):
+                reports.append({
+                    'month': month_dir,
+                    'html_filename': 'report.html',
+                    'rel_path': f"{month_dir}/report.html",
+                    'download_url': f"/api/admin/reports/download/{month_dir}/report.html"
+                })
 
     return jsonify({'reports': reports}), 200
+
+
+@report_bp.route('/download/<path:fname>', methods=['GET'])
+@admin_required
+def download_report(fname):
+    """Download or view a generated monthly report file from REPORTS_FOLDER."""
+    reports_base = current_app.config['REPORTS_FOLDER']
+    return send_from_directory(reports_base, fname)

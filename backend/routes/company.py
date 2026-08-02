@@ -89,6 +89,20 @@ def delete_drive(drive_id):
     
     return jsonify({'message': 'Drive deleted'}), 200
 
+@company_bp.route('/drives/<int:drive_id>/close', methods=['PUT'])
+@company_required
+def close_drive(drive_id):
+    uid = get_jwt_identity()
+    drive = CompanyService.close_drive(uid, drive_id)
+    
+    cache.delete(f'company:drives:{uid}')
+    cache.delete(f'company:stats:{uid}')
+    cache.delete_pattern('admin:drives:*')
+    cache.delete('admin:stats')
+    cache.delete('admin:activities')
+    
+    return jsonify({'message': 'Placement drive closed', 'drive': drive}), 200
+
 @company_bp.route('/applications', methods=['GET'])
 @company_required
 def get_received_applications():
@@ -113,8 +127,21 @@ def shortlist_student(app_id):
 @company_required
 def reject_application(app_id):
     uid = get_jwt_identity()
-    CompanyService.reject_application(uid, app_id)
-    return jsonify({'message': 'Application rejected'}), 200
+    app = CompanyService.reject_application(uid, app_id)
+    cache.delete(f'company:stats:{uid}')
+    return jsonify({'message': 'Application rejected', 'application': app}), 200
+
+@company_bp.route('/applications/<int:app_id>/status', methods=['PUT'])
+@company_required
+def update_application_status(app_id):
+    uid = get_jwt_identity()
+    payload = request.get_json() or {}
+    new_status = payload.get('status')
+    
+    app = CompanyService.update_application_status(uid, app_id, new_status)
+    cache.delete(f'company:stats:{uid}')
+    
+    return jsonify({'message': f"Application status updated to {new_status}", 'application': app}), 200
 
 @company_bp.route('/interviews', methods=['GET'])
 @company_required

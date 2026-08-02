@@ -1,0 +1,11 @@
+ID,Name,Email,Register Number,Department,Year,CGPA,Skills,Phone,Graduation Year,Marks 10th,Marks 12th,Backlogs,Preferred Role,Placement Status,Account Status,Total Applications,Shortlisted,Interview Stage,Selected,Rejected
+1,Pranith,pranith@gmail.com,787979,btech,4,90.0,,,,,,0,,Not Placed,active,0,0,0,0,0
+2,varun,varun@gmail.com,8990988,computer,4,15.0,SQl,7890654321,2027,,,0,DEveloper,Not Placed,active,0,0,0,0,0
+3,adhithya,adhithiya@gmail.com,7890,bba,4,7.0,,,,,,0,,Not Placed,inactive,0,0,0,0,0
+4,Test Student,teststudent@univ.edu,2024TEST001,CSE,4,0.0,,,,,,0,,Not Placed,active,0,0,0,0,0
+5,Strong Pwd Student,strong_pwd_student@college.edu,REG_STRONG_101,IT,4,0.0,,,,,,0,,Not Placed,active,0,0,0,0,0
+6,Alice AdminTest,alice_admin_test@college.edu,REG_ADM_999,Computer Science,4,9.2,,,,,,0,,Placed,active,1,0,0,1,0
+7,Bob ClosedTest,bob_closed_test@college.edu,REG_BOB_999,IT,4,8.5,,,,,,0,,Not Placed,active,0,0,0,0,0
+8,Audit Student 1785680407,audit_student_1785680407@college.edu,REG_AUDIT_1785680407,ECE,4,8.8,,9876543210,,,,0,,Placed,active,1,0,0,1,0
+9,Audit Student 1785680426,audit_student_1785680426@college.edu,REG_AUDIT_1785680426,ECE,4,8.8,,9876543210,,,,0,,Placed,active,1,0,0,1,0
+10,Audit Student 1785680445,audit_student_1785680445@college.edu,REG_AUDIT_1785680445,ECE,4,8.8,,9876543210,,,,0,,Placed,active,1,0,0,1,0
