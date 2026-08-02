@@ -41,13 +41,6 @@
         <label class="form-label">Password</label>
         <input v-model="form.password" type="password" class="form-control form-control-lg" placeholder="••••••••" required />
       </div>
-      <div class="col-12 d-flex justify-content-between align-items-center">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="rememberMe" />
-          <label class="form-check-label" for="rememberMe">Remember me</label>
-        </div>
-        <router-link to="/auth/forgot-password" class="text-primary fw-semibold">Forgot password?</router-link>
-      </div>
       <div class="col-12">
         <button type="submit" class="btn btn-primary btn-lg w-100" :disabled="loading">
           <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>

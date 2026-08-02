@@ -7,6 +7,7 @@ from models.interview import Interview
 from models.result import Result
 from exceptions import NotFound, ValidationError, Forbidden
 from utils.stats import create_stat_item
+from utils.validators import validate_phone
 
 class CompanyService:
     """Service layer handling company-specific logic, placement drives and interviews."""
@@ -59,6 +60,9 @@ class CompanyService:
     def update_profile(cls, user_id, payload):
         company = cls.get_company_by_user(user_id)
         
+        if 'contact_phone' in payload and payload['contact_phone']:
+            payload['contact_phone'] = validate_phone(payload['contact_phone'], field_name="Contact phone")
+
         allowed_fields = ['company_name', 'industry', 'website', 'description',
                           'contact_person', 'contact_email', 'contact_phone', 'city', 'address']
                           
@@ -168,6 +172,21 @@ class CompanyService:
         db.session.commit()
 
     @classmethod
+    def close_drive(cls, user_id, drive_id):
+        company = cls.get_company_by_user(user_id)
+        drive = db.session.query(PlacementDrive).filter(
+            PlacementDrive.id == drive_id,
+            PlacementDrive.company_id == company.id
+        ).first()
+        
+        if not drive:
+            raise NotFound('Placement drive not found')
+            
+        drive.status = 'closed'
+        db.session.commit()
+        return drive.to_dict()
+
+    @classmethod
     def get_received_applications(cls, user_id, status_filter, drive_filter):
         company = cls.get_company_by_user(user_id)
         drive_ids = company.drive_ids
@@ -189,6 +208,47 @@ class CompanyService:
             raise Forbidden('This application does not belong to your drives')
 
     @classmethod
+    def _notify_student_status_update(cls, app, status, extra_info=None):
+        """Sends automated HTML email and GChat notification to the applicant when status updates."""
+        try:
+            from services.email_service import send_email
+            from services.gchat_service import send_gchat_notification
+
+            student = app.student
+            if not student or not student.user:
+                return
+
+            recipient_email = student.user.email
+            student_name = student.user.name
+            drive_title = app.drive.title if app.drive else 'Placement Drive'
+            company_name = app.drive.company.company_name if app.drive and app.drive.company else 'Company'
+
+            subject = f"Application Status Update: {status.capitalize()} - {company_name}"
+            status_display = status.capitalize()
+            details_html = f"<p style='background-color: #f8f9fa; padding: 10px; border-radius: 5px;'><strong>Details:</strong> {extra_info}</p>" if extra_info else ""
+
+            html_body = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+              <h2 style="color: #0d6efd; margin-top: 0;">Application Status Update</h2>
+              <p>Dear <strong>{student_name}</strong>,</p>
+              <p>Your application status for <strong>{drive_title}</strong> at <strong>{company_name}</strong> has been updated to:</p>
+              <div style="font-size: 20px; font-weight: bold; margin: 16px 0; padding: 12px; background-color: #eef2ff; color: #0d6efd; border-radius: 6px; text-align: center;">
+                {status_display}
+              </div>
+              {details_html}
+              <p>Please log in to your student placement dashboard for further information.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="font-size: 12px; color: #888;">Automated notification from University Placement Portal</p>
+            </div>
+            """
+
+            send_email(recipient_email, subject, html_body)
+            send_gchat_notification(f"Application Update: {student_name} -> {status_display} ({drive_title} at {company_name})")
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"Could not dispatch notification to student: {exc}")
+
+    @classmethod
     def shortlist_student(cls, user_id, app_id):
         company = cls.get_company_by_user(user_id)
         app = db.session.query(Application).filter(Application.id == app_id).first()
@@ -203,6 +263,7 @@ class CompanyService:
             student.placement_status = 'Applied'
 
         db.session.commit()
+        cls._notify_student_status_update(app, 'shortlisted')
         return app.to_dict()
 
     @classmethod
@@ -215,6 +276,36 @@ class CompanyService:
         cls.verify_app_owner(company, app)
         app.application_status = 'rejected'
         db.session.commit()
+        cls._notify_student_status_update(app, 'rejected')
+        return app.to_dict()
+
+    @classmethod
+    def update_application_status(cls, user_id, app_id, new_status):
+        allowed = ['shortlisted', 'selected', 'rejected', 'interview', 'applied']
+        clean_status = (new_status or '').lower().strip()
+        if clean_status not in allowed:
+            raise ValidationError(f"Status must be one of: {', '.join(allowed)}")
+
+        company = cls.get_company_by_user(user_id)
+        app = db.session.query(Application).filter(Application.id == app_id).first()
+        if not app:
+            raise NotFound('Application not found')
+
+        cls.verify_app_owner(company, app)
+        app.application_status = clean_status
+
+        if app.student:
+            if clean_status == 'selected':
+                app.student.placement_status = 'Placed'
+            elif clean_status == 'interview':
+                app.student.placement_status = 'Interview'
+            elif clean_status == 'shortlisted':
+                if app.student.placement_status not in ('Placed', 'Interview'):
+                    app.student.placement_status = 'Applied'
+
+        db.session.commit()
+        cls._notify_student_status_update(app, clean_status)
+        return app.to_dict()
 
     @classmethod
     def get_scheduled_interviews(cls, user_id):
@@ -248,6 +339,10 @@ class CompanyService:
 
         cls.verify_app_owner(company, app)
 
+        # Enforce Rule: Interview scheduling only allowed for shortlisted applicants
+        if app.application_status not in ('shortlisted', 'interview'):
+            raise ValidationError('Interviews can only be scheduled for shortlisted applicants. Please shortlist candidate first.')
+
         interview = app.interview if app.interview else Interview(application_id=app_id)
         if not app.interview:
             db.session.add(interview)
@@ -269,6 +364,8 @@ class CompanyService:
             app.student.placement_status = 'Interview'
 
         db.session.commit()
+        extra_note = f"Round: {payload.get('round_name', 'Interview')} | Date: {payload.get('interview_date')} {payload.get('interview_time', '')} ({payload.get('interview_mode', 'online')})"
+        cls._notify_student_status_update(app, 'interview', extra_info=extra_note)
         return interview.to_dict()
 
     @classmethod
@@ -329,3 +426,4 @@ class CompanyService:
             app.student.placement_status = 'Placed'
 
         db.session.commit()
+        cls._notify_student_status_update(app, status_res, extra_info=payload.get('remarks'))

@@ -26,7 +26,17 @@
             <div class="col-md-6"><label class="form-label">Industry</label><input v-model="form.industry" class="form-control" /></div>
             <div class="col-md-6"><label class="form-label">Contact Person</label><input v-model="form.contact_person" class="form-control" /></div>
             <div class="col-md-6"><label class="form-label">Contact Email</label><input v-model="form.contact_email" class="form-control" /></div>
-            <div class="col-md-6"><label class="form-label">Contact Phone</label><input v-model="form.contact_phone" class="form-control" /></div>
+            <div class="col-md-6">
+              <label class="form-label">Contact Phone</label>
+              <input
+                v-model="form.contact_phone"
+                type="tel"
+                maxlength="10"
+                class="form-control"
+                placeholder="10-digit phone number"
+                @input="onPhoneInput"
+              />
+            </div>
             <div class="col-md-6"><label class="form-label">Website</label><input v-model="form.website" class="form-control" /></div>
             <div class="col-12"><label class="form-label">Description</label><textarea v-model="form.description" class="form-control" rows="4"></textarea></div>
             <div class="col-12 d-grid d-md-flex gap-2">
@@ -45,6 +55,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { companyAPI } from '@/api/company'
+import { isValidPhone } from '@/utils/validators'
 
 const company = ref(null)
 const loading = ref(true)
@@ -53,7 +64,18 @@ const msg = ref('')
 const error = ref('')
 const form = ref({ company_name: '', industry: '', contact_person: '', contact_email: '', contact_phone: '', website: '', description: '' })
 
+function onPhoneInput(e) {
+  if (form.value.contact_phone) {
+    form.value.contact_phone = e.target.value.replace(/\D/g, '').slice(0, 10)
+  }
+}
+
 async function handleSave() {
+  if (form.value.contact_phone && !isValidPhone(form.value.contact_phone)) {
+    error.value = 'Contact phone must be exactly 10 digits.'
+    return
+  }
+
   saving.value = true
   error.value = ''
   msg.value = ''

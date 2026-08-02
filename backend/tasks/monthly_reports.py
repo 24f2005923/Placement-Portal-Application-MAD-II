@@ -1,38 +1,19 @@
 """
 monthly_reports.py — Monthly placement report Celery task
-──────────────────────────────────────────────────────────
-Generates a comprehensive placement statistics report on the 1st
-of every month.  The report is produced in two formats:
+─────────────────────────────────────────────────────────────
+Generates a structured HTML placement analytics report for the requested
+month/year.  All metrics are computed from live database records by
+AdminService — no hardcoded values, no sample data.
 
-  1. HTML  — saved to backend/reports/YYYY-MM/report.html
-  2. PDF   — saved to backend/reports/YYYY-MM/report.pdf
-             (generated from the HTML using ReportLab)
-
-The report includes:
-  • Application statistics (total, by status)
-  • Placement summary (placed vs. not placed students)
-  • Company analytics (most active companies, industries)
-  • Drive success metrics (conversion rate, selections)
-
-Beat schedule: defined in celery_app.py — runs 1st of every month.
-
-Retry policy:
-  • Retries up to 2 times with a 10-minute delay.
+Scheduled via Celery Beat (1st of every month at 06:00 UTC) or triggered
+manually via POST /api/admin/reports/generate.
 """
 
-import io
-import logging
 import os
-from datetime import date, datetime, timezone
-from calendar import monthrange
+import logging
+from datetime import datetime, timezone
 
 from celery_app import celery
-from models import db
-from models.student import Student
-from models.company import Company
-from models.placement_drive import PlacementDrive
-from models.application import Application
-from models.result import Result
 
 logger = logging.getLogger(__name__)
 
@@ -40,481 +21,204 @@ logger = logging.getLogger(__name__)
 @celery.task(
     name='tasks.monthly_reports.generate_monthly_report',
     bind=True,
-    max_retries=2,
-    default_retry_delay=600,   # retry after 10 minutes
+    max_retries=3,
+    default_retry_delay=120,
 )
-def generate_monthly_report(self, target_month: str = None):
+def generate_monthly_report(self, target_year=None, target_month=None, requested_by_email=None):
     """
-    Generate the monthly placement report.
+    Asynchronous task — computes placement analytics via AdminService and
+    renders an HTML report saved to REPORTS_FOLDER.
 
     Args:
-        target_month: Optional 'YYYY-MM' string to generate a report
-                      for a specific past month.  Defaults to the
-                      previous calendar month.
+        target_year:         Optional int year  (defaults to current year).
+        target_month:        Optional int month (defaults to current month).
+        requested_by_email:  Optional email to notify upon completion.
 
     Returns:
-        Dict with file paths and summary statistics.
+        Dict with 'status', file paths, and headline metrics.
     """
-    logger.info('=== Monthly Report Task Started ===')
+    logger.info('=== Monthly Placement Report Task Started (task_id=%s) ===', self.request.id)
 
     try:
         from flask import current_app
+        from services.admin_service import AdminService
 
-        # ── Determine which month to report on ────────────────────
-        if target_month:
-            report_year, report_month = map(int, target_month.split('-'))
-        else:
-            today = date.today()
-            # Default: report on the previous month
-            if today.month == 1:
-                report_month, report_year = 12, today.year - 1
-            else:
-                report_month, report_year = today.month - 1, today.year
+        now   = datetime.now(timezone.utc)
+        year  = int(target_year)  if target_year  else now.year
+        month = int(target_month) if target_month else now.month
 
-        month_label = date(report_year, report_month, 1).strftime('%B %Y')
-        logger.info('Generating placement report for: %s', month_label)
+        # ── 1. Compute all metrics via the shared service layer ─────────
+        analytics = AdminService.get_report_analytics()
+        companies = AdminService.get_top_companies(limit=10)
 
-        # ── Collect statistics ─────────────────────────────────────
-        stats = _gather_statistics(report_year, report_month)
+        stu  = analytics['students']
+        drv  = analytics['drives']
+        apps = analytics['applications']
+        depts = analytics['department_breakdown']
 
-        # ── Ensure output directories exist ───────────────────────
+        # ── 2. Create output directory ──────────────────────────────────
         reports_base = current_app.config['REPORTS_FOLDER']
-        month_dir = os.path.join(reports_base, f'{report_year}-{report_month:02d}')
+        month_str    = f"{year}-{month:02d}"
+        month_dir    = os.path.join(reports_base, month_str)
         os.makedirs(month_dir, exist_ok=True)
 
-        # ── Generate HTML report ───────────────────────────────────
-        html_content  = _render_html_report(month_label, stats)
-        html_filename = 'placement_report.html'
-        html_path     = os.path.join(month_dir, html_filename)
+        html_filename = 'report.html'
+        html_filepath = os.path.join(month_dir, html_filename)
+        rel_html_path = f"{month_str}/{html_filename}"
 
-        with open(html_path, 'w', encoding='utf-8') as html_file:
-            html_file.write(html_content)
+        # ── 3. Build HTML sections ──────────────────────────────────────
+        report_title   = f"Monthly Placement Report — {datetime(year, month, 1).strftime('%B %Y')}"
+        generated_time = now.strftime('%B %d, %Y %H:%M UTC')
 
-        logger.info('HTML report saved to: %s', html_path)
-
-        # ── Generate PDF report ────────────────────────────────────
-        pdf_filename = 'placement_report.pdf'
-        pdf_path     = os.path.join(month_dir, pdf_filename)
-        _generate_pdf_report(month_label, stats, pdf_path)
-
-        logger.info('PDF report saved to: %s', pdf_path)
-
-        # ── Send summary notification ──────────────────────────────
-        from services.gchat_service import send_gchat_message
-        gchat_msg = (
-            f"📊 *Monthly Placement Report — {month_label}*\n"
-            f"Total Students: {stats['total_students']}\n"
-            f"Placed Students: {stats['placed_students']}\n"
-            f"Placement Rate: {stats['placement_rate']}%\n"
-            f"Total Applications: {stats['total_applications']}\n"
-            f"Report generated at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
-        )
-        send_gchat_message(gchat_msg)
-
-        result = {
-            'status': 'completed',
-            'month': month_label,
-            'html_path': html_path,
-            'pdf_path': pdf_path,
-            'stats_summary': {
-                'total_students': stats['total_students'],
-                'placed_students': stats['placed_students'],
-                'placement_rate': stats['placement_rate'],
-                'total_applications': stats['total_applications'],
-            }
-        }
-
-        logger.info('=== Monthly Report Task Done for %s ===', month_label)
-        return result
-
-    except Exception as exc:
-        logger.error('Monthly report task failed: %s', exc, exc_info=True)
-        raise self.retry(exc=exc)
-
-
-# ── Statistics gathering ──────────────────────────────────────────
-
-def _gather_statistics(year: int, month: int) -> dict:
-    """
-    Query the database and compile all statistics for the report.
-
-    Returns a comprehensive stats dictionary used by both the HTML
-    and PDF generators.
-    """
-    # ── Student counts ─────────────────────────────────────────────
-    total_students   = db.session.query(Student).count()
-    placed_students  = db.session.query(Student).filter(
-        Student.placement_status == 'Placed'
-    ).count()
-    placement_rate = _pct(placed_students, total_students)
-
-    # ── Application counts ─────────────────────────────────────────
-    total_applications = db.session.query(Application).count()
-    status_counts = {}
-    for status in ['applied', 'shortlisted', 'interview', 'selected', 'rejected']:
-        count = db.session.query(Application).filter(
-            Application.application_status == status
-        ).count()
-        status_counts[status] = count
-
-    # ── Drive statistics ───────────────────────────────────────────
-    total_drives    = db.session.query(PlacementDrive).count()
-    open_drives     = db.session.query(PlacementDrive).filter(
-        PlacementDrive.status == 'open'
-    ).count()
-    closed_drives   = db.session.query(PlacementDrive).filter(
-        PlacementDrive.status == 'closed'
-    ).count()
-
-    # ── Company statistics ─────────────────────────────────────────
-    total_companies    = db.session.query(Company).count()
-    approved_companies = db.session.query(Company).filter(
-        Company.approval_status == 'approved'
-    ).count()
-
-    # Top 5 companies by number of applications received
-    top_companies = _get_top_companies(limit=5)
-
-    # Department-wise placement breakdown
-    department_stats = _get_department_stats()
-
-    # Industry breakdown
-    industry_stats = _get_industry_stats()
-
-    return {
-        'total_students':       total_students,
-        'placed_students':      placed_students,
-        'placement_rate':       placement_rate,
-        'total_applications':   total_applications,
-        'status_counts':        status_counts,
-        'total_drives':         total_drives,
-        'open_drives':          open_drives,
-        'closed_drives':        closed_drives,
-        'total_companies':      total_companies,
-        'approved_companies':   approved_companies,
-        'top_companies':        top_companies,
-        'department_stats':     department_stats,
-        'industry_stats':       industry_stats,
-        'interview_success_rate': _pct(status_counts.get('selected', 0), status_counts.get('interview', 0) + status_counts.get('selected', 0)),
-        'generated_at':         datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
-    }
-
-
-def _get_top_companies(limit: int) -> list:
-    """Return the top N companies ranked by applications received."""
-    companies = db.session.query(Company).filter(
-        Company.approval_status == 'approved'
-    ).all()
-
-    company_data = []
-    for company in companies:
-        app_count = sum(len(drive.applications) for drive in company.drives)
-        if app_count > 0:
-            selected = sum(
-                1 for drive in company.drives
-                for app in drive.applications
-                if app.application_status == 'selected'
+        # Company table rows
+        if companies:
+            company_rows = ''.join(
+                f"<tr>"
+                f"<td><strong>{c['company_name']}</strong></td>"
+                f"<td>{c['industry']}</td>"
+                f"<td>{c['drives']}</td>"
+                f"<td>{c['total_applications']}</td>"
+                f"<td><span class='badge bg-success'>{c['selections']} placed</span></td>"
+                f"</tr>"
+                for c in companies
             )
-            company_data.append({
-                'name':        company.company_name,
-                'industry':    company.industry or 'N/A',
-                'drives':      len(company.drives),
-                'applications': app_count,
-                'selected':    selected,
-            })
+        else:
+            company_rows = "<tr><td colspan='5' class='text-center text-muted'>No approved company data available.</td></tr>"
 
-    # Sort by applications count descending, take top N
-    company_data.sort(key=lambda x: x['applications'], reverse=True)
-    return company_data[:limit]
+        # Department table rows
+        if depts:
+            dept_rows = ''.join(
+                f"<tr>"
+                f"<td>{d['department']}</td>"
+                f"<td>{d['total']}</td>"
+                f"<td>{d['placed']}</td>"
+                f"<td>{d['rate']}%</td>"
+                f"</tr>"
+                for d in depts
+            )
+        else:
+            dept_rows = "<tr><td colspan='4' class='text-center text-muted'>No department data available.</td></tr>"
 
-
-def _get_department_stats() -> list:
-    """Return placement stats grouped by student department."""
-    students = db.session.query(Student).all()
-    dept_map = {}
-
-    for student in students:
-        dept = student.department or 'Unknown'
-        if dept not in dept_map:
-            dept_map[dept] = {'total': 0, 'placed': 0}
-        dept_map[dept]['total'] += 1
-        if student.placement_status == 'Placed':
-            dept_map[dept]['placed'] += 1
-
-    result = []
-    for dept, counts in dept_map.items():
-        result.append({
-            'department': dept,
-            'total':      counts['total'],
-            'placed':     counts['placed'],
-            'rate':       _pct(counts['placed'], counts['total']),
-        })
-
-    result.sort(key=lambda x: x['total'], reverse=True)
-    return result
-
-
-def _get_industry_stats() -> list:
-    """Return the distribution of approved companies by industry."""
-    companies = db.session.query(Company).filter(
-        Company.approval_status == 'approved'
-    ).all()
-
-    industry_map = {}
-    for company in companies:
-        industry = company.industry or 'Other'
-        industry_map[industry] = industry_map.get(industry, 0) + 1
-
-    result = [{'industry': k, 'count': v} for k, v in industry_map.items()]
-    result.sort(key=lambda x: x['count'], reverse=True)
-    return result
-
-
-# ── HTML report generator ─────────────────────────────────────────
-
-def _render_html_report(month_label: str, stats: dict) -> str:
-    """Build the full HTML placement report as a string."""
-
-    # Build rows for application status table
-    status_rows = ''
-    for status, count in stats['status_counts'].items():
-        pct = _pct(count, stats['total_applications'])
-        status_rows += f'<tr><td>{status.title()}</td><td>{count}</td><td>{pct}%</td></tr>'
-
-    # Build rows for top companies table
-    company_rows = ''
-    for c in stats['top_companies']:
-        company_rows += (
-            f'<tr><td>{c["name"]}</td><td>{c["industry"]}</td>'
-            f'<td>{c["drives"]}</td><td>{c["applications"]}</td>'
-            f'<td>{c["selected"]}</td></tr>'
-        )
-
-    # Build rows for department table
-    dept_rows = ''
-    for d in stats['department_stats']:
-        dept_rows += (
-            f'<tr><td>{d["department"]}</td><td>{d["total"]}</td>'
-            f'<td>{d["placed"]}</td><td>{d["rate"]}%</td></tr>'
-        )
-
-    return f"""<!DOCTYPE html>
+        # ── 4. Render full HTML ─────────────────────────────────────────
+        html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Placement Report — {month_label}</title>
+  <meta charset="utf-8">
+  <title>{report_title}</title>
   <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; }}
-    .page {{ max-width: 1000px; margin: 0 auto; background: #fff; }}
-    .header {{ background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; padding: 40px; }}
-    .header h1 {{ font-size: 28px; font-weight: 700; }}
-    .header p  {{ opacity: 0.85; margin-top: 6px; font-size: 14px; }}
-    .content   {{ padding: 36px 40px; }}
-    .section   {{ margin-bottom: 36px; }}
-    .section h2 {{ font-size: 18px; font-weight: 600; color: #4f46e5; border-bottom: 2px solid #e0e0ff; padding-bottom: 8px; margin-bottom: 18px; }}
-    .metrics-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }}
-    .metric {{ background: #f8f7ff; border: 1px solid #e0e0ff; border-radius: 10px; padding: 20px; text-align: center; }}
-    .metric .value {{ font-size: 32px; font-weight: 700; color: #4f46e5; }}
-    .metric .label {{ font-size: 13px; color: #666; margin-top: 4px; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-    th {{ background: #4f46e5; color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; }}
-    td {{ padding: 10px 14px; border-bottom: 1px solid #eee; }}
-    tr:hover td {{ background: #f8f7ff; }}
-    .footer {{ background: #f9f9f9; padding: 20px 40px; font-size: 12px; color: #888; border-top: 1px solid #eee; }}
+    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 32px; color: #1e293b; background: #f8fafc; }}
+    .card {{ background: #fff; border-radius: 12px; padding: 32px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 28px; }}
+    .header {{ border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; }}
+    .title  {{ font-size: 24px; font-weight: 700; color: #2563eb; }}
+    .sub    {{ font-size: 12px; color: #64748b; margin-top: 4px; }}
+    .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }}
+    .kpi  {{ background: #f1f5f9; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; text-align: center; }}
+    .kpi-val  {{ font-size: 28px; font-weight: 700; color: #2563eb; }}
+    .kpi-lbl  {{ font-size: 11px; text-transform: uppercase; font-weight: 600; color: #64748b; margin-bottom: 4px; }}
+    .kpi-sub  {{ font-size: 11px; color: #94a3b8; margin-top: 4px; }}
+    h3  {{ font-size: 16px; font-weight: 600; color: #334155; margin: 0 0 14px 0; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 10px 14px; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: 13px; }}
+    th  {{ background: #f8fafc; font-weight: 600; color: #475569; }}
+    .badge {{ padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }}
+    .bg-success {{ background: #22c55e; color: #fff; }}
+    .footer {{ margin-top: 36px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; }}
   </style>
 </head>
 <body>
-<div class="page">
-  <div class="header">
-    <h1>📊 Monthly Placement Report</h1>
-    <p>{month_label} &nbsp;|&nbsp; Generated: {stats['generated_at']}</p>
-  </div>
-
-  <div class="content">
-
-    <!-- Key Metrics -->
-    <div class="section">
-      <h2>Key Metrics</h2>
-      <div class="metrics-grid">
-        <div class="metric"><div class="value">{stats['total_students']}</div><div class="label">Total Students</div></div>
-        <div class="metric"><div class="value">{stats['placed_students']}</div><div class="label">Placed Students</div></div>
-        <div class="metric"><div class="value">{stats['placement_rate']}%</div><div class="label">Placement Rate</div></div>
-        <div class="metric"><div class="value">{stats['total_applications']}</div><div class="label">Total Applications</div></div>
+  <div class="card">
+    <div class="header">
+      <div>
+        <div class="title">{report_title}</div>
+        <div class="sub">University Placement Portal · Executive Analytics Summary</div>
+      </div>
+      <div style="font-size:11px; text-align:right; color:#64748b;">
+        Generated: {generated_time}<br>
+        Report ID: RPT-{month_str}
       </div>
     </div>
 
-    <!-- Drive Summary -->
-    <div class="section">
-      <h2>Drive Summary</h2>
-      <div class="metrics-grid">
-        <div class="metric"><div class="value">{stats['total_drives']}</div><div class="label">Total Drives</div></div>
-        <div class="metric"><div class="value">{stats['open_drives']}</div><div class="label">Open Drives</div></div>
-        <div class="metric"><div class="value">{stats['closed_drives']}</div><div class="label">Closed Drives</div></div>
-        <div class="metric"><div class="value">{stats['interview_success_rate']}%</div><div class="label">Interview Success</div></div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-lbl">Placement Rate</div>
+        <div class="kpi-val">{stu['placement_rate']}%</div>
+        <div class="kpi-sub">{stu['placed']} of {stu['total']} students</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-lbl">Total Drives</div>
+        <div class="kpi-val">{drv['total']}</div>
+        <div class="kpi-sub">{drv['open']} open · {drv['closed']} closed</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-lbl">Shortlist Rate</div>
+        <div class="kpi-val">{apps['shortlist_rate']}%</div>
+        <div class="kpi-sub">{apps['shortlisted']} shortlisted</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-lbl">Final Selections</div>
+        <div class="kpi-val">{apps['selected']}</div>
+        <div class="kpi-sub">{apps['selection_rate']}% conversion rate</div>
       </div>
     </div>
 
-    <!-- Application Pipeline -->
-    <div class="section">
-      <h2>Application Pipeline</h2>
-      <table>
-        <thead><tr><th>Status</th><th>Count</th><th>% of Total</th></tr></thead>
-        <tbody>{status_rows or '<tr><td colspan="3">No applications recorded.</td></tr>'}</tbody>
-      </table>
-    </div>
+    <h3>Top Hiring Partners</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th><th>Industry</th><th>Drives</th>
+          <th>Applications</th><th>Selections</th>
+        </tr>
+      </thead>
+      <tbody>{company_rows}</tbody>
+    </table>
 
-    <!-- Top Companies -->
-    <div class="section">
-      <h2>Top Companies by Applications</h2>
-      <table>
-        <thead><tr><th>Company</th><th>Industry</th><th>Drives</th><th>Applications</th><th>Selected</th></tr></thead>
-        <tbody>{company_rows or '<tr><td colspan="5">No company data available.</td></tr>'}</tbody>
-      </table>
-    </div>
+    <h3 style="margin-top:28px;">Department-wise Placement</h3>
+    <table>
+      <thead>
+        <tr><th>Department</th><th>Total</th><th>Placed</th><th>Rate</th></tr>
+      </thead>
+      <tbody>{dept_rows}</tbody>
+    </table>
 
-    <!-- Department-wise Placement -->
-    <div class="section">
-      <h2>Department-wise Placement</h2>
-      <table>
-        <thead><tr><th>Department</th><th>Total Students</th><th>Placed</th><th>Rate</th></tr></thead>
-        <tbody>{dept_rows or '<tr><td colspan="4">No department data available.</td></tr>'}</tbody>
-      </table>
+    <div class="footer">
+      <span>University Placement Portal · Analytics Module</span>
+      <span>All data sourced from live database records</span>
     </div>
-
   </div>
-
-  <div class="footer">
-    <p>This is an auto-generated report from the University Placement Portal.
-       Data reflects cumulative records as of the report generation date.</p>
-  </div>
-</div>
 </body>
 </html>"""
 
+        with open(html_filepath, 'w', encoding='utf-8') as fh:
+            fh.write(html_content)
 
-# ── PDF report generator ──────────────────────────────────────────
+        logger.info('Monthly placement report written to %s', html_filepath)
 
-def _generate_pdf_report(month_label: str, stats: dict, output_path: str):
-    """
-    Generate a PDF placement report using ReportLab.
+        # ── 5. Optional email notification ─────────────────────────────
+        if requested_by_email:
+            try:
+                from services.email_service import send_email
+                subject   = f"Monthly Placement Report Generated — {month_str}"
+                body_html = (
+                    f"<p>Dear Admin,</p>"
+                    f"<p>The monthly placement report for <strong>{month_str}</strong> "
+                    f"has been generated successfully.</p>"
+                    f"<p>Placement Rate: <strong>{stu['placement_rate']}%</strong> "
+                    f"({stu['placed']} students placed)</p>"
+                )
+                send_email(requested_by_email, subject, body_html)
+            except Exception as mail_err:
+                logger.warning('Report completion email failed: %s', mail_err)
 
-    ReportLab is a pure-Python library — no system binaries required.
-    The PDF mirrors the key sections of the HTML report.
-    """
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-            HRFlowable
-        )
+        return {
+            'status':          'completed',
+            'month':           month_str,
+            'html_path':       rel_html_path,
+            'download_url':    f'/api/admin/reports/download/{rel_html_path}',
+            'placement_rate':  stu['placement_rate'],
+            'placed_students': stu['placed'],
+            'total_drives':    drv['total'],
+        }
 
-        doc    = SimpleDocTemplate(output_path, pagesize=A4,
-                                   leftMargin=2*cm, rightMargin=2*cm,
-                                   topMargin=2*cm, bottomMargin=2*cm)
-        styles = getSampleStyleSheet()
-        story  = []
-
-        # ── Title ──────────────────────────────────────────────────
-        title_style = ParagraphStyle(
-            'ReportTitle',
-            parent=styles['Title'],
-            fontSize=22,
-            textColor=colors.HexColor('#4f46e5'),
-            spaceAfter=4,
-        )
-        story.append(Paragraph(f'Placement Report — {month_label}', title_style))
-        story.append(Paragraph(f'Generated: {stats["generated_at"]}', styles['Normal']))
-        story.append(Spacer(1, 0.5*cm))
-        story.append(HRFlowable(width='100%', color=colors.HexColor('#4f46e5')))
-        story.append(Spacer(1, 0.5*cm))
-
-        # ── Section helper ─────────────────────────────────────────
-        section_style = ParagraphStyle(
-            'SectionHeader',
-            parent=styles['Heading2'],
-            fontSize=14,
-            textColor=colors.HexColor('#4f46e5'),
-            spaceBefore=16,
-            spaceAfter=8,
-        )
-
-        table_header_bg = colors.HexColor('#4f46e5')
-        table_alt_bg    = colors.HexColor('#f8f7ff')
-
-        def make_table(headers, rows, col_widths=None):
-            data = [headers] + (rows if rows else [['No data available'] + [''] * (len(headers)-1)])
-            tbl  = Table(data, colWidths=col_widths)
-            tbl.setStyle(TableStyle([
-                ('BACKGROUND',   (0, 0), (-1, 0), table_header_bg),
-                ('TEXTCOLOR',    (0, 0), (-1, 0), colors.white),
-                ('FONTNAME',     (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE',     (0, 0), (-1, 0), 10),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, table_alt_bg]),
-                ('FONTSIZE',     (0, 1), (-1, -1), 9),
-                ('GRID',         (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
-                ('VALIGN',       (0, 0), (-1, -1), 'MIDDLE'),
-                ('PADDING',      (0, 0), (-1, -1), 6),
-            ]))
-            return tbl
-
-        # ── Key Metrics ────────────────────────────────────────────
-        story.append(Paragraph('Key Metrics', section_style))
-        metrics_rows = [[
-            str(stats['total_students']), str(stats['placed_students']),
-            f"{stats['placement_rate']}%", str(stats['total_applications'])
-        ]]
-        story.append(make_table(
-            ['Total Students', 'Placed', 'Placement Rate', 'Applications'],
-            metrics_rows
-        ))
-        story.append(Spacer(1, 0.4*cm))
-
-        # ── Application pipeline ───────────────────────────────────
-        story.append(Paragraph('Application Pipeline', section_style))
-        pipe_rows = [
-            [status.title(), str(count), f"{_pct(count, stats['total_applications'])}%"]
-            for status, count in stats['status_counts'].items()
-        ]
-        story.append(make_table(['Status', 'Count', '% of Total'], pipe_rows))
-        story.append(Spacer(1, 0.4*cm))
-
-        # ── Top companies ──────────────────────────────────────────
-        story.append(Paragraph('Top Companies by Applications', section_style))
-        comp_rows = [
-            [c['name'], c['industry'], str(c['drives']), str(c['applications']), str(c['selected'])]
-            for c in stats['top_companies']
-        ]
-        story.append(make_table(
-            ['Company', 'Industry', 'Drives', 'Applications', 'Selected'], comp_rows
-        ))
-        story.append(Spacer(1, 0.4*cm))
-
-        # ── Department stats ───────────────────────────────────────
-        story.append(Paragraph('Department-wise Placement', section_style))
-        dept_rows = [
-            [d['department'], str(d['total']), str(d['placed']), f"{d['rate']}%"]
-            for d in stats['department_stats']
-        ]
-        story.append(make_table(
-            ['Department', 'Total Students', 'Placed', 'Rate'], dept_rows
-        ))
-
-        doc.build(story)
-        logger.info('PDF report generated: %s', output_path)
-
-    except ImportError:
-        logger.error('ReportLab is not installed. Run: pip install reportlab')
     except Exception as exc:
-        logger.error('PDF generation failed: %s', exc, exc_info=True)
-
-
-# ── Utility ───────────────────────────────────────────────────────
-
-def _pct(part: int, total: int) -> float:
-    """Calculate percentage rounded to one decimal place."""
-    return round((part / total) * 100, 1) if total > 0 else 0.0
+        logger.error('Monthly placement report task failed: %s', exc, exc_info=True)
+        raise self.retry(exc=exc)

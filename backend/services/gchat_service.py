@@ -127,3 +127,10 @@ def send_gchat_card(title: str, subtitle: str, body_text: str) -> bool:
     except Exception as exc:
         logger.error('Error sending Google Chat card: %s', exc)
         return False
+
+
+def send_gchat_notification(title: str, text: str = None) -> bool:
+    """Helper alias to send notification card or text message to Google Chat."""
+    if text is None:
+        return send_gchat_message(title)
+    return send_gchat_card(title, "Placement Portal Notification", text)

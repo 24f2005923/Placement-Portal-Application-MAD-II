@@ -8,9 +8,7 @@ const routes = [
     children: [
       { path: '', redirect: 'login' },
       { path: 'login', component: () => import('@/pages/auth/LoginPage.vue') },
-      { path: 'adminlogin', component: () => import('@/pages/auth/AdminLoginPage.vue') },
-      { path: 'forgot-password', component: () => import('@/pages/auth/ForgotPasswordPage.vue') },
-      { path: 'reset-password', component: () => import('@/pages/auth/ResetPasswordPage.vue') }
+      { path: 'adminlogin', component: () => import('@/pages/auth/AdminLoginPage.vue') }
     ]
   },
   {
@@ -41,7 +39,7 @@ const routes = [
       { path: 'drives', component: () => import('@/pages/admin/PlacementDrivesPage.vue') },
       { path: 'drives/:id', component: () => import('@/pages/admin/DriveDetailsPage.vue') },
       { path: 'reports', component: () => import('@/pages/admin/ReportsPage.vue') },
-      { path: 'settings', component: () => import('@/pages/admin/SettingsPage.vue') }
+      { path: 'applications', component: () => import('@/pages/admin/ManageApplicationsPage.vue') }
     ]
   },
   {
