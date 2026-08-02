@@ -3,9 +3,17 @@
     <div class="col-12 col-xl-8">
       <div class="portal-card p-4">
         <h3 class="section-heading mb-2">Profile Management</h3>
-        <p class="text-muted mb-4">Update academic details, skills, and contact information.</p>
-        <div v-if="error" class="alert alert-danger">{{ error }}</div>
-        <div v-if="success" class="alert alert-success">{{ success }}</div>
+        <p class="text-muted mb-4">Update academic details, skills, contact information, and resume.</p>
+        
+        <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+          <button type="button" class="btn-close" @click="error = ''"></button>
+        </div>
+        <div v-if="success" class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="bi bi-check-circle me-2"></i>{{ success }}
+          <button type="button" class="btn-close" @click="success = ''"></button>
+        </div>
+
         <div v-if="loading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
         <form v-else class="row g-3" @submit.prevent="handleSave">
           <div class="col-md-6"><label class="form-label">Full Name</label><input v-model="form.name" class="form-control" required /></div>
@@ -20,23 +28,61 @@
           <div class="col-12 d-grid">
             <button class="btn btn-primary" :disabled="saving">
               <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
-              {{ saving ? 'Saving...' : 'Save Profile' }}
+              {{ saving ? 'Saving Profile...' : 'Save Profile' }}
             </button>
           </div>
         </form>
       </div>
     </div>
-    <div class="col-12 col-xl-4">
-      <div class="portal-card p-4 h-100">
+
+    <!-- Right Column: Profile Completeness & Resume Management -->
+    <div class="col-12 col-xl-4 d-flex flex-column gap-4">
+      <div class="portal-card p-4">
         <h5 class="section-heading mb-3">Profile Completeness</h5>
         <div class="progress mb-2" style="height: 10px;">
-          <div class="progress-bar" :style="{ width: completeness + '%' }"></div>
+          <div class="progress-bar bg-success" :style="{ width: completeness + '%' }"></div>
         </div>
         <small class="text-muted">{{ completeness }}% complete</small>
         <div class="mt-4">
-          <div class="small text-muted mb-2">Placement Status</div>
-          <span class="badge badge-soft-primary">{{ form.placement_status || 'Not Placed' }}</span>
+          <div class="small text-muted mb-1">Placement Status</div>
+          <span class="badge badge-soft-primary px-3 py-2 fs-6">{{ form.placement_status || 'Not Placed' }}</span>
         </div>
+      </div>
+
+      <!-- Resume Management Card -->
+      <div class="portal-card p-4">
+        <h5 class="section-heading mb-2">Resume Management</h5>
+        <p class="text-muted small mb-3">Manage your default profile resume for drive applications.</p>
+
+        <div v-if="resumeSuccess" class="alert alert-success small py-2 mb-3">{{ resumeSuccess }}</div>
+        <div v-if="resumeError" class="alert alert-danger small py-2 mb-3">{{ resumeError }}</div>
+
+        <div v-if="currentResume" class="alert alert-light border mb-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="text-truncate me-2">
+              <i class="bi bi-file-earmark-pdf text-danger fs-5 me-2"></i>
+              <span class="fw-medium small text-truncate d-inline-block" style="max-width: 140px;" :title="currentResume">
+                {{ currentResume }}
+              </span>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary" @click="openResume(currentResume)">
+              View
+            </button>
+          </div>
+        </div>
+        <div v-else class="text-muted small mb-3">No default resume uploaded yet.</div>
+
+        <form @submit.prevent="handleUploadResume">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Upload / Replace Resume</label>
+            <input type="file" accept=".pdf,.doc,.docx" class="form-control form-control-sm" @change="onFileSelected" required />
+            <div class="form-text extra-small">Formats: PDF, DOC, DOCX (Max 5MB)</div>
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline-primary w-100" :disabled="uploading || !selectedFile">
+            <span v-if="uploading" class="spinner-border spinner-border-sm me-1"></span>
+            {{ uploading ? 'Uploading...' : 'Upload New Resume' }}
+          </button>
+        </form>
       </div>
     </div>
   </div>
@@ -45,19 +91,59 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { studentAPI } from '@/api/student'
+import { openResume } from '@/utils/resume'
 
 const loading = ref(true)
 const saving = ref(false)
+const uploading = ref(false)
 const error = ref('')
 const success = ref('')
-const form = ref({ name: '', email: '', register_number: '', cgpa: '', phone: '', department: '', preferred_role: '', graduation_year: '', placement_status: '' })
+const resumeSuccess = ref('')
+const resumeError = ref('')
+
+const currentResume = ref('')
+const selectedFile = ref(null)
 const skillsInput = ref('')
 
+const form = ref({
+  name: '',
+  email: '',
+  register_number: '',
+  cgpa: '',
+  phone: '',
+  department: '',
+  preferred_role: '',
+  graduation_year: '',
+  placement_status: ''
+})
+
 const completeness = computed(() => {
-  const fields = [form.value.name, form.value.email, form.value.cgpa, form.value.phone, form.value.department, skillsInput.value, form.value.preferred_role, form.value.graduation_year]
+  const fields = [form.value.name, form.value.email, form.value.cgpa, form.value.phone, form.value.department, skillsInput.value, form.value.preferred_role, form.value.graduation_year, currentResume.value]
   const filled = fields.filter(Boolean).length
   return Math.round((filled / fields.length) * 100)
 })
+
+function onFileSelected(e) {
+  selectedFile.value = e.target.files[0] || null
+}
+
+async function handleUploadResume() {
+  if (!selectedFile.value) return
+  uploading.value = true
+  resumeError.value = ''
+  resumeSuccess.value = ''
+  try {
+    const { data } = await studentAPI.uploadResume(selectedFile.value)
+    currentResume.value = data.resume_path
+    resumeSuccess.value = 'Resume uploaded successfully.'
+    selectedFile.value = null
+    setTimeout(() => { resumeSuccess.value = '' }, 3000)
+  } catch (err) {
+    resumeError.value = err.response?.data?.error || 'Resume upload failed.'
+  } finally {
+    uploading.value = false
+  }
+}
 
 async function handleSave() {
   saving.value = true
@@ -78,8 +164,23 @@ onMounted(async () => {
   try {
     const { data } = await studentAPI.getProfile()
     const s = data.student
-    form.value = { name: s.name, email: s.email, register_number: s.register_number, cgpa: s.cgpa, phone: s.phone || '', department: s.department, preferred_role: s.preferred_role || '', graduation_year: s.graduation_year || '', placement_status: s.placement_status }
+    form.value = {
+      name: s.name,
+      email: s.email,
+      register_number: s.register_number,
+      cgpa: s.cgpa,
+      phone: s.phone || '',
+      department: s.department,
+      preferred_role: s.preferred_role || '',
+      graduation_year: s.graduation_year || '',
+      placement_status: s.placement_status
+    }
+    currentResume.value = s.resume_path || ''
     skillsInput.value = (s.skills || []).join(', ')
-  } catch (err) { console.error(err) } finally { loading.value = false }
+  } catch (err) {
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
 })
 </script>

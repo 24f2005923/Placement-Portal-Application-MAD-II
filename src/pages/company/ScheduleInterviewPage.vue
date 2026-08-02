@@ -3,22 +3,45 @@
     <div class="col-12 col-xl-5">
       <div class="portal-card p-4">
         <h3 class="section-heading mb-2">Schedule Interview</h3>
-        <p class="text-muted mb-4">Create interview slots for shortlisted candidates.</p>
-        <div v-if="error" class="alert alert-danger">{{ error }}</div>
-        <div v-if="success" class="alert alert-success">{{ success }}</div>
+        <p class="text-muted mb-4">Create interview slots exclusively for shortlisted candidates.</p>
+
+        <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+          <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+          <button type="button" class="btn-close" @click="error = ''"></button>
+        </div>
+        <div v-if="success" class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+          <i class="bi bi-check-circle me-2"></i>{{ success }}
+          <button type="button" class="btn-close" @click="success = ''"></button>
+        </div>
+
+        <div v-if="shortlisted.length === 0 && !fetchingApps" class="alert alert-warning mb-3">
+          <i class="bi bi-info-circle me-2"></i>
+          No shortlisted candidates available. Please shortlist candidates from
+          <router-link to="/company/applications" class="fw-bold alert-link">View Applications</router-link> before scheduling an interview.
+        </div>
+
         <form class="row g-3" @submit.prevent="handleSchedule">
           <div class="col-12">
-            <label class="form-label">Select Candidate</label>
-            <select v-model="form.application_id" class="form-select" required>
-              <option value="">— Choose applicant —</option>
+            <label class="form-label fw-semibold">Select Shortlisted Candidate</label>
+            <select v-model="form.application_id" class="form-select" required :disabled="shortlisted.length === 0">
+              <option value="">— Choose shortlisted applicant —</option>
               <option v-for="app in shortlisted" :key="app.id" :value="app.id">
-                {{ app.student_name }} — {{ app.drive_title }}
+                {{ app.student_name }} — {{ app.drive_title }} ({{ app.application_status }})
               </option>
             </select>
           </div>
-          <div class="col-12"><label class="form-label">Interview Round</label><input v-model="form.round_name" class="form-control" placeholder="Technical Round 1" /></div>
-          <div class="col-md-6"><label class="form-label">Date</label><input v-model="form.interview_date" class="form-control" type="date" required /></div>
-          <div class="col-md-6"><label class="form-label">Time</label><input v-model="form.interview_time" class="form-control" type="time" /></div>
+          <div class="col-12">
+            <label class="form-label">Interview Round</label>
+            <input v-model="form.round_name" class="form-control" placeholder="Technical Round 1" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Date</label>
+            <input v-model="form.interview_date" class="form-control" type="date" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Time</label>
+            <input v-model="form.interview_time" class="form-control" type="time" required />
+          </div>
           <div class="col-12">
             <label class="form-label">Mode</label>
             <select v-model="form.interview_mode" class="form-select">
@@ -26,11 +49,14 @@
               <option value="offline">Offline</option>
             </select>
           </div>
-          <div class="col-12"><label class="form-label">Interview Link (optional)</label><input v-model="form.interview_link" class="form-control" placeholder="https://meet.google.com/..." /></div>
+          <div class="col-12">
+            <label class="form-label">Interview Link / Location (optional)</label>
+            <input v-model="form.interview_link" class="form-control" placeholder="https://meet.google.com/..." />
+          </div>
           <div class="col-12 d-grid">
-            <button class="btn btn-primary" :disabled="loading">
+            <button class="btn btn-primary" :disabled="loading || shortlisted.length === 0">
               <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-              {{ loading ? 'Scheduling...' : 'Schedule' }}
+              {{ loading ? 'Scheduling...' : 'Schedule Interview' }}
             </button>
           </div>
         </form>
@@ -38,13 +64,26 @@
     </div>
     <div class="col-12 col-xl-7">
       <div class="portal-card p-4">
-        <h5 class="section-heading mb-3">Upcoming Interviews</h5>
-        <div v-if="interviews.length === 0" class="border rounded-4 p-4 text-center text-muted">No interviews scheduled yet.</div>
+        <h5 class="section-heading mb-3">Upcoming Scheduled Interviews</h5>
+        <div v-if="interviews.length === 0" class="border rounded-4 p-4 text-center text-muted">
+          No interviews scheduled yet.
+        </div>
         <div v-else class="list-group">
-          <div v-for="iv in interviews" :key="iv.id" class="list-group-item">
-            <div class="fw-semibold">{{ iv.student_name }}</div>
-            <small class="text-muted">{{ iv.drive_title }} — {{ iv.round_name }}</small>
-            <div class="small mt-1">{{ iv.interview_date }} {{ iv.interview_time }} ({{ iv.interview_mode }})</div>
+          <div v-for="iv in interviews" :key="iv.id" class="list-group-item p-3">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-semibold text-primary fs-6">{{ iv.student_name }}</div>
+                <div class="small text-muted">{{ iv.drive_title }} — <span class="fw-medium text-dark">{{ iv.round_name || 'Interview Round' }}</span></div>
+                <div class="small mt-1 text-secondary">
+                  <i class="bi bi-calendar-event me-1"></i>{{ iv.interview_date }}
+                  <i class="bi bi-clock ms-2 me-1"></i>{{ iv.interview_time || 'TBD' }}
+                  <span class="badge badge-soft-info ms-2 text-capitalize">{{ iv.interview_mode }}</span>
+                </div>
+                <div v-if="iv.interview_link" class="small mt-1">
+                  <a :href="iv.interview_link" target="_blank" class="text-decoration-none"><i class="bi bi-link-45deg me-1"></i>Meeting Link</a>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -59,6 +98,7 @@ import { companyAPI } from '@/api/company'
 const shortlisted = ref([])
 const interviews = ref([])
 const loading = ref(false)
+const fetchingApps = ref(true)
 const error = ref('')
 const success = ref('')
 const form = ref({ application_id: '', round_name: '', interview_date: '', interview_time: '', interview_mode: 'online', interview_link: '' })
@@ -69,8 +109,9 @@ async function handleSchedule() {
   success.value = ''
   try {
     await companyAPI.scheduleInterview(form.value)
-    success.value = 'Interview scheduled successfully.'
+    success.value = 'Interview scheduled successfully. Applicant notified.'
     form.value = { application_id: '', round_name: '', interview_date: '', interview_time: '', interview_mode: 'online', interview_link: '' }
+    await fetchShortlisted()
     await fetchInterviews()
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to schedule interview.'
@@ -79,16 +120,28 @@ async function handleSchedule() {
   }
 }
 
+async function fetchShortlisted() {
+  fetchingApps.value = true
+  try {
+    const { data } = await companyAPI.getApplications({ status: 'shortlisted' })
+    shortlisted.value = data.applications || []
+  } catch (err) {
+    console.error('Fetch shortlisted error:', err)
+  } finally {
+    fetchingApps.value = false
+  }
+}
+
 async function fetchInterviews() {
-  const { data } = await companyAPI.getInterviews()
-  interviews.value = data.interviews
+  try {
+    const { data } = await companyAPI.getInterviews()
+    interviews.value = data.interviews || []
+  } catch (err) {
+    console.error('Fetch interviews error:', err)
+  }
 }
 
 onMounted(async () => {
-  try {
-    const [appsRes] = await Promise.all([companyAPI.getApplications({ status: 'shortlisted' })])
-    shortlisted.value = appsRes.data.applications
-    await fetchInterviews()
-  } catch (err) { console.error(err) }
+  await Promise.all([fetchShortlisted(), fetchInterviews()])
 })
 </script>
