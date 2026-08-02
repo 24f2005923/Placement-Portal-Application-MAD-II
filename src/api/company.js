@@ -33,6 +33,9 @@ export const companyAPI = {
   deleteDrive: function (driveId) {
     return api.delete('/api/company/drives/' + driveId)
   },
+  closeDrive: function (driveId) {
+    return api.put('/api/company/drives/' + driveId + '/close')
+  },
 
   // applications
   getApplications: function (params) {
@@ -43,6 +46,9 @@ export const companyAPI = {
   },
   rejectApplication: function (appId) {
     return api.put('/api/company/applications/' + appId + '/reject')
+  },
+  updateApplicationStatus: function (appId, newStatus) {
+    return api.put('/api/company/applications/' + appId + '/status', { status: newStatus })
   },
 
   // interviews

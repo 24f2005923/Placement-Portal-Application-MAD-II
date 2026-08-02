@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import SearchBar from './SearchBar.vue'
 import NotificationsDropdown from './NotificationsDropdown.vue'
 import UserProfileDropdown from './UserProfileDropdown.vue'
 
@@ -19,7 +18,7 @@ const title = computed(() => {
     ['/admin/drives/', 'Drive Details'],
     ['/admin/drives', 'Placement Drive Management'],
     ['/admin/reports', 'Reports'],
-    ['/admin/settings', 'Settings'],
+    ['/admin/applications', 'Application Management'],
     ['/company/dashboard', 'Company Dashboard'],
     ['/company/register', 'Company Registration'],
     ['/company/profile', 'Company Profile'],
@@ -37,9 +36,7 @@ const title = computed(() => {
     ['/student/drives', 'View Placement Drives'],
     ['/student/applications', 'Track Application Status'],
     ['/student/history', 'Placement History'],
-    ['/auth/login', 'Login'],
-    ['/auth/forgot-password', 'Forgot Password'],
-    ['/auth/reset-password', 'Reset Password']
+    ['/auth/login', 'Login']
   ]
 
   const match = map.find(([pattern]) => (pattern.endsWith('/') ? path.startsWith(pattern) : path === pattern))
@@ -61,9 +58,6 @@ const title = computed(() => {
       </div>
 
       <div class="d-flex align-items-center gap-2 gap-lg-3">
-        <div class="d-none d-xl-block">
-          <SearchBar placeholder="Search students, companies, drives..." />
-        </div>
         <NotificationsDropdown />
         <UserProfileDropdown />
       </div>

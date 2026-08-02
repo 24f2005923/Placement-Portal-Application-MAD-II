@@ -4,7 +4,7 @@ export const adminNav = [
   { label: 'Companies', icon: 'bi-buildings', to: '/admin/companies' },
   { label: 'Placement Drives', icon: 'bi-megaphone', to: '/admin/drives' },
   { label: 'Reports', icon: 'bi-bar-chart', to: '/admin/reports' },
-  { label: 'Settings', icon: 'bi-gear', to: '/admin/settings' },
+  { label: 'Applications', icon: 'bi-file-earmark-text', to: '/admin/applications' },
   { label: 'Logout', icon: 'bi-box-arrow-right', to: '/auth/login' }
 ]
 

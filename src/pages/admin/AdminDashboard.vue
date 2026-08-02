@@ -7,24 +7,22 @@ import { adminAPI } from '@/api/admin'
 
 const stats = ref([])
 const drives = ref([])
-const students = ref([])
+const activities = ref([])
 const loading = ref(true)
 
 const driveHeaders = ['Company', 'Role', 'Package', 'Deadline', 'Status']
 const driveColumns = ['company_name', 'job_role', 'package', 'deadline', 'status']
-const studentHeaders = ['Name', 'Department', 'CGPA', 'Status', 'Placement']
-const studentColumns = ['name', 'department', 'cgpa', 'status', 'placement_status']
 
 onMounted(async () => {
   try {
-    const [statsRes, drivesRes, studentsRes] = await Promise.all([
+    const [statsRes, drivesRes, activitiesRes] = await Promise.all([
       adminAPI.getStats(),
       adminAPI.getDrives({ per_page: 5 }),
-      adminAPI.getStudents({ per_page: 5 })
+      adminAPI.getActivities()
     ])
     stats.value = statsRes.data.stats
     drives.value = drivesRes.data.drives
-    students.value = studentsRes.data.students
+    activities.value = activitiesRes.data.activities || []
   } catch (err) {
     console.error('Dashboard load error:', err)
   } finally {
@@ -43,7 +41,7 @@ onMounted(async () => {
         <StatCard v-bind="item" />
       </div>
 
-      <div class="col-12 col-xl-6">
+      <div class="col-12 col-xl-8">
         <SectionCard title="Active Placement Drives" subtitle="Current drives in progress">
           <DataTable :headers="driveHeaders" :columns="driveColumns" :rows="drives">
             <template #status="{ row }">
@@ -55,15 +53,20 @@ onMounted(async () => {
         </SectionCard>
       </div>
 
-      <div class="col-12 col-xl-6">
-        <SectionCard title="Top Students" subtitle="High-performing candidates in the current batch">
-          <DataTable :headers="studentHeaders" :columns="studentColumns" :rows="students">
-            <template #status="{ row }">
-              <span class="badge rounded-pill" :class="row.status === 'active' ? 'badge-soft-success' : 'badge-soft-danger'">
-                {{ row.status }}
-              </span>
-            </template>
-          </DataTable>
+      <div class="col-12 col-xl-4">
+        <SectionCard title="Recent Activity" subtitle="Latest portal events">
+          <div v-if="activities.length === 0" class="text-muted small py-3 text-center">No recent activity.</div>
+          <ul v-else class="list-group list-group-flush">
+            <li v-for="(act, idx) in activities" :key="idx" class="list-group-item px-0 bg-transparent">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="fw-medium small">{{ act.title }}</div>
+                  <div class="text-muted extra-small" style="font-size: 0.75rem;">{{ act.meta }}</div>
+                </div>
+                <span class="badge badge-soft-info ms-2">Activity</span>
+              </div>
+            </li>
+          </ul>
         </SectionCard>
       </div>
     </template>

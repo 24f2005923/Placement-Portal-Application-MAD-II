@@ -12,17 +12,35 @@ export const adminAPI = {
     return api.get('/api/admin/activities')
   },
 
-  // reports
-  getReportStats: function () {
-    return api.get('/api/admin/reports/stats')
+  // reports — analytics (live DB)
+  getPlacementAnalytics: function () {
+    return api.get('/api/admin/reports/analytics')
+  },
+  getTopCompanies: function (limit) {
+    return api.get('/api/admin/reports/companies/top', { params: { limit: limit || 10 } })
+  },
+  generateReport: function (payload) {
+    return api.post('/api/admin/reports/generate', payload || {})
+  },
+  getReportStatus: function (taskId) {
+    return api.get('/api/admin/reports/status/' + taskId)
+  },
+  listReports: function () {
+    return api.get('/api/admin/reports/list')
   },
 
-  // portal settings
-  getSettings: function () {
-    return api.get('/api/admin/settings')
+  // csv exports
+  triggerStudentExport: function (payload) {
+    return api.post('/api/admin/export/students', payload || {})
   },
-  updateSettings: function (settingsData) {
-    return api.put('/api/admin/settings', settingsData)
+  triggerCompanyExport: function (payload) {
+    return api.post('/api/admin/export/companies', payload || {})
+  },
+  getApplications: function (params) {
+    return api.get('/api/admin/applications', { params: params || {} })
+  },
+  setApplicationStatus: function (appId, newStatus) {
+    return api.put('/api/admin/applications/' + appId + '/status', { status: newStatus })
   },
 
   // students management
@@ -68,6 +86,9 @@ export const adminAPI = {
   },
   rejectDrive: function (driveId) {
     return api.put('/api/admin/drives/' + driveId + '/reject')
+  },
+  closeDrive: function (driveId) {
+    return api.put('/api/admin/drives/' + driveId + '/close')
   },
   setDriveStatus: function (driveId, newStatus) {
     return api.put('/api/admin/drives/' + driveId + '/status', { status: newStatus })

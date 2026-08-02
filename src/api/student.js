@@ -55,6 +55,17 @@ export const studentAPI = {
 
   getHistory: function () {
     return httpClient.get('/api/student/history')
+  },
+
+  getOfferLetterUrl: function (appId) {
+    const token = localStorage.getItem('access_token')
+    return `/api/student/applications/${appId}/offer-letter?token=${token}`
+  },
+
+  downloadOfferLetter: function (appId) {
+    return httpClient.get(`/api/student/applications/${appId}/offer-letter`, {
+      responseType: 'blob'
+    })
   }
 }
 
