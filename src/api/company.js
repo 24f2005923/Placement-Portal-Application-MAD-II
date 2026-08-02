@@ -58,6 +58,9 @@ export const companyAPI = {
   scheduleInterview: function (interviewData) {
     return api.post('/api/company/interviews', interviewData)
   },
+  sendInterviewEmail: function (interviewId) {
+    return api.post('/api/company/interviews/' + interviewId + '/email')
+  },
 
   // results
   getResults: function () {

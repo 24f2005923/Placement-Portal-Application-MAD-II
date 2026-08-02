@@ -1,5 +1,15 @@
 import os
 from datetime import timedelta
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from the backend/ directory (where this file lives).
+# This must happen before any os.environ.get() calls so that all
+# environment variables defined in .env are visible to the rest of
+# the configuration — including the Celery worker process.
+_env_path = Path(__file__).resolve().parent / '.env'
+load_dotenv(_env_path, override=False)   # override=False: real env vars win over .env
+
 
 # ─────────────────────────────────────────────────────────────────
 # Application Configuration
@@ -12,14 +22,14 @@ class Config:
     DB_FILE  = os.path.join(ROOT_DIR, 'database', 'placement.db')
 
     # ── Flask Core ───────────────────────────────────────────────
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'placement@portal2024'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'placement-portal-secret-key-2024!'
 
     # ── SQLAlchemy ───────────────────────────────────────────────
     SQLALCHEMY_DATABASE_URI      = f'sqlite:///{DB_FILE}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # ── JWT ──────────────────────────────────────────────────────
-    JWT_SECRET_KEY          = os.environ.get('JWT_SECRET_KEY') or 'jwt@portal2024'
+    JWT_SECRET_KEY          = os.environ.get('JWT_SECRET_KEY') or 'jwt-placement-portal-secret-key-2024!'
     JWT_ACCESS_TOKEN_EXPIRES  = timedelta(hours=8)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
 

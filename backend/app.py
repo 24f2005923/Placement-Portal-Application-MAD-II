@@ -12,6 +12,8 @@ from models.placement_drive import PlacementDrive
 from models.application import Application
 from models.interview import Interview
 from models.result import Result
+from models.reminder_history import ReminderHistory
+from models.interview_reminder_history import InterviewReminderHistory
 
 # Blueprint imports are deferred inside create_app() so that import
 # failures produce a clear ImportError (not a NameError at registration).

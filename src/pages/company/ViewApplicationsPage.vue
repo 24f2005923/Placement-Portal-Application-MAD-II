@@ -15,11 +15,20 @@ const columns = ['drive_title', 'student_name', 'resume', 'application_status', 
 
 async function fetchApplications() {
   loading.value = true
+  errorMsg.value = ''
   try {
     const { data } = await companyAPI.getApplications()
     applications.value = data.applications || []
   } catch (err) {
     console.error(err)
+    const status = err.response?.status
+    if (status === 401 || status === 403) {
+      errorMsg.value = 'Session expired or unauthorized. Please log out and log back in.'
+    } else if (status === 404) {
+      errorMsg.value = 'Company profile not found. Please log out, log in again, and ensure your account is approved.'
+    } else {
+      errorMsg.value = err.response?.data?.error || 'Failed to load applications. Please try again.'
+    }
   } finally {
     loading.value = false
   }

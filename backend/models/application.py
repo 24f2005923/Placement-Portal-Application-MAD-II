@@ -47,7 +47,13 @@ class Application(db.Model, DictMixin):
         linked_student = self.student
         effective_resume = self.resume_path or (linked_student.resume_path if linked_student else None)
         dict_out['resume_path'] = effective_resume
-        dict_out['resume_url'] = f"/api/student/resume/{effective_resume}" if effective_resume else None
+        # Build an absolute backend URL so the admin can open the resume directly.
+        # Using the admin-scoped endpoint avoids routing through the Vue app,
+        # which would otherwise redirect to /auth/login for unrecognised paths.
+        dict_out['resume_url'] = (
+            f"http://localhost:5000/api/admin/resumes/{effective_resume}"
+            if effective_resume else None
+        )
 
         if include_student and linked_student:
             linked_user = linked_student.user

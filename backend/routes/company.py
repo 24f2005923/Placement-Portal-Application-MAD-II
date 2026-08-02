@@ -168,6 +168,13 @@ def schedule_interview():
         
     return jsonify({'message': 'Interview scheduled successfully', 'interview': interview}), 201
 
+@company_bp.route('/interviews/<int:interview_id>/email', methods=['POST'])
+@company_required
+def send_interview_email(interview_id):
+    uid = get_jwt_identity()
+    CompanyService.send_interview_email(uid, interview_id)
+    return jsonify({'message': 'Interview reminder email sent successfully to the candidate'}), 200
+
 @company_bp.route('/results', methods=['GET'])
 @company_required
 def get_result_candidates():

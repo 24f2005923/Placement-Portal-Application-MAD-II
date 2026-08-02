@@ -14,7 +14,7 @@
           <button type="button" class="btn-close" @click="success = ''"></button>
         </div>
 
-        <div v-if="shortlisted.length === 0 && !fetchingApps" class="alert alert-warning mb-3">
+        <div v-if="!fetchingApps && !fetchError && shortlisted.length === 0" class="alert alert-warning mb-3">
           <i class="bi bi-info-circle me-2"></i>
           No shortlisted candidates available. Please shortlist candidates from
           <router-link to="/company/applications" class="fw-bold alert-link">View Applications</router-link> before scheduling an interview.
@@ -82,6 +82,12 @@
                 <div v-if="iv.interview_link" class="small mt-1">
                   <a :href="iv.interview_link" target="_blank" class="text-decoration-none"><i class="bi bi-link-45deg me-1"></i>Meeting Link</a>
                 </div>
+                <div class="mt-2">
+                  <button class="btn btn-sm btn-outline-primary" @click="sendEmail(iv.id)" :disabled="sendingEmailId === iv.id">
+                    <span v-if="sendingEmailId === iv.id" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="bi bi-envelope me-1"></i>Email Reminder
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -99,8 +105,10 @@ const shortlisted = ref([])
 const interviews = ref([])
 const loading = ref(false)
 const fetchingApps = ref(true)
+const fetchError = ref(false)
 const error = ref('')
 const success = ref('')
+const sendingEmailId = ref(null)
 const form = ref({ application_id: '', round_name: '', interview_date: '', interview_time: '', interview_mode: 'online', interview_link: '' })
 
 async function handleSchedule() {
@@ -122,11 +130,14 @@ async function handleSchedule() {
 
 async function fetchShortlisted() {
   fetchingApps.value = true
+  fetchError.value = false
   try {
     const { data } = await companyAPI.getApplications({ status: 'shortlisted' })
     shortlisted.value = data.applications || []
   } catch (err) {
     console.error('Fetch shortlisted error:', err)
+    fetchError.value = true
+    shortlisted.value = []
   } finally {
     fetchingApps.value = false
   }
@@ -138,6 +149,22 @@ async function fetchInterviews() {
     interviews.value = data.interviews || []
   } catch (err) {
     console.error('Fetch interviews error:', err)
+  }
+}
+
+async function sendEmail(interviewId) {
+  sendingEmailId.value = interviewId
+  error.value = ''
+  success.value = ''
+  try {
+    const { data } = await companyAPI.sendInterviewEmail(interviewId)
+    success.value = data.message || 'Email sent successfully.'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  } catch (err) {
+    error.value = err.response?.data?.error || 'Failed to send email.'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  } finally {
+    sendingEmailId.value = null
   }
 }
 

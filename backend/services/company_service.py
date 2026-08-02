@@ -369,6 +369,66 @@ class CompanyService:
         return interview.to_dict()
 
     @classmethod
+    def send_interview_email(cls, user_id, interview_id):
+        company = cls.get_company_by_user(user_id)
+        
+        interview = db.session.query(Interview).filter(Interview.id == interview_id).first()
+        if not interview:
+            raise NotFound('Interview not found')
+
+        app = interview.application
+        if not app:
+            raise NotFound('Associated application not found')
+
+        cls.verify_app_owner(company, app)
+
+        student = app.student
+        if not student or not student.user:
+            raise ValidationError('Candidate has no registered email address')
+
+        from services.email_service import send_email
+
+        recipient_email = student.user.email
+        student_name = student.user.name
+        drive_title = app.drive.title if app.drive else 'Placement Drive'
+        company_name = app.drive.company.company_name if app.drive and app.drive.company else 'Company'
+        
+        round_name = interview.round_name or 'Interview'
+        date_str = interview.interview_date.strftime('%b %d, %Y') if interview.interview_date else 'TBD'
+        time_str = interview.interview_time or 'TBD'
+        mode_str = (interview.interview_mode or 'online').capitalize()
+        link_str = f'<a href="{interview.interview_link}">{interview.interview_link}</a>' if interview.interview_link else 'N/A'
+
+        subject = f"Interview Reminder: {round_name} - {company_name}"
+
+        html_body = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #0d6efd; margin-top: 0;">Interview Reminder</h2>
+            <p>Dear <strong>{student_name}</strong>,</p>
+            <p>This is a reminder for your upcoming interview for the <strong>{drive_title}</strong> role at <strong>{company_name}</strong>.</p>
+            
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Round:</strong> {round_name}</p>
+                <p style="margin: 5px 0;"><strong>Date:</strong> {date_str}</p>
+                <p style="margin: 5px 0;"><strong>Time:</strong> {time_str}</p>
+                <p style="margin: 5px 0;"><strong>Mode:</strong> {mode_str}</p>
+                <p style="margin: 5px 0;"><strong>Link / Location:</strong> {link_str}</p>
+            </div>
+            
+            <p>Please ensure you are prepared and join on time. Best of luck!</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #888;">Automated notification from University Placement Portal</p>
+        </div>
+        """
+
+        success = send_email(recipient_email, subject, html_body)
+        if not success:
+            raise ValidationError('Failed to send email. Please try again later.')
+
+        return True
+
+
+    @classmethod
     def get_result_candidates(cls, user_id):
         company = cls.get_company_by_user(user_id)
         drive_ids = company.drive_ids

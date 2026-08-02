@@ -19,11 +19,14 @@ Retry policy:
 import logging
 from datetime import date, timedelta
 
+from sqlalchemy.exc import IntegrityError
+
 from celery_app import celery
 from models import db
 from models.interview import Interview
 from models.application import Application
 from models.student import Student
+from models.interview_reminder_history import InterviewReminderHistory
 from services.email_service import send_email
 from services.gchat_service import send_gchat_message
 from services.sms_service import get_sms_provider
@@ -91,6 +94,26 @@ def send_interview_reminders(self):
             if user is None:
                 continue
 
+            # ── Idempotency guard ─────────────────────────────────
+            # Check whether a reminder has already been dispatched for
+            # this specific interview. If so, skip it entirely to avoid
+            # spamming the student even if the Beat task fires multiple
+            # times on the same day.
+            already_notified = (
+                db.session.query(InterviewReminderHistory)
+                .filter(
+                    InterviewReminderHistory.student_id  == student.id,
+                    InterviewReminderHistory.interview_id == interview.id,
+                )
+                .first()
+            )
+            if already_notified:
+                logger.debug(
+                    'Skipping duplicate reminder for student_id=%s interview_id=%s (sent at %s)',
+                    student.id, interview.id, already_notified.sent_at
+                )
+                continue
+
             # Build human-readable interview details.
             interview_info = _build_interview_info(interview, application)
 
@@ -117,6 +140,23 @@ def send_interview_reminders(self):
                     f"Mode: {interview_info['mode']}. All the best!"
                 )
                 sms_provider.send(to=student.phone, message=sms_body)
+
+            # ── Record to history (idempotency write) ─────────────
+            # Use try/except to gracefully handle the rare race condition
+            # where two workers dispatch simultaneously for the same record.
+            try:
+                history_entry = InterviewReminderHistory(
+                    student_id=student.id,
+                    interview_id=interview.id,
+                )
+                db.session.add(history_entry)
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                logger.warning(
+                    'Duplicate reminder history write for student_id=%s interview_id=%s — skipped.',
+                    student.id, interview.id
+                )
 
             reminders_sent += 1
             logger.info(

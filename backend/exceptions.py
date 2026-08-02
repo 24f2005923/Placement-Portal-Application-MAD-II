@@ -11,6 +11,10 @@ class PlacementError(Exception):
 class NotFound(PlacementError):
     status_code = 404
 
+class Unauthorized(PlacementError):
+    """Raised when a request carries no token, an expired token, or an invalid token."""
+    status_code = 401
+
 class Forbidden(PlacementError):
     status_code = 403
 

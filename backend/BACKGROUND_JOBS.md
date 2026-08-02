@@ -26,38 +26,177 @@ Redis caching layer work in the Placement Portal backend.
 
 ---
 
-## Prerequisites
+## Prerequisites & Local Setup
 
-### 1. Install Redis
+Follow these steps **in order** to run the full background job stack locally.
 
-**Windows (using WSL or Docker):**
-```bash
-# Using Docker (recommended for Windows):
-docker run -d --name redis -p 6379:6379 redis:alpine
+---
 
-# Or via WSL:
-sudo apt-get install redis-server
-redis-server
-```
-
-**Linux/Mac:**
-```bash
-sudo apt-get install redis-server   # Ubuntu/Debian
-brew install redis                  # macOS
-redis-server                        # start Redis
-```
-
-Verify Redis is running:
-```bash
-redis-cli ping   # should print: PONG
-```
-
-### 2. Install Python dependencies
+### Step 1 — Install Python dependencies
 
 From the `backend/` directory:
 ```bash
 pip install -r requirements.txt
 ```
+
+Key packages installed:
+| Package | Purpose |
+|---|---|
+| `python-dotenv` | Load `.env` into `os.environ` |
+| `celery[redis]` | Async task queue |
+| `redis` | Redis Python client |
+| `reportlab` | PDF report generation |
+| `flower` | Celery monitoring dashboard |
+
+---
+
+### Step 2 — Create your `.env` file
+
+If `backend/.env` does not exist, copy the example and fill in values:
+```bash
+cd backend
+copy .env.example .env    # Windows
+# or
+cp .env.example .env       # macOS/Linux
+```
+
+The `.env` file is loaded automatically by `config.py` via `python-dotenv`.
+Every value in `.env` overrides the hardcoded defaults, **but real system
+environment variables always take precedence** (`override=False`).
+
+**Minimum required values for local development:**
+```env
+SECRET_KEY=any-random-string
+JWT_SECRET_KEY=any-random-jwt-string
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+
+# MailHog (see Step 4)
+MAIL_SERVER=localhost
+MAIL_PORT=1025
+MAIL_USE_TLS=false
+MAIL_USERNAME=dev@placement-portal.local
+MAIL_PASSWORD=mailhog
+MAIL_SENDER=noreply@placement-portal.local
+```
+
+> **Why MAIL_USERNAME must not be empty:** `email_service.py` checks whether
+> `MAIL_USERNAME` is set. An empty value activates console mode (emails printed
+> to the log). Any non-empty string activates real SMTP delivery. MailHog
+> accepts any username/password, so the values above are intentional.
+
+---
+
+### Step 3 — Install & start Redis
+
+**Windows — Memurai (native Redis port, recommended):**
+1. Download from https://www.memurai.com/ and run the installer.
+2. Memurai starts automatically as a Windows service on port 6379.
+
+**Windows — WSL (Ubuntu subsystem):**
+```bash
+# Inside your WSL terminal:
+sudo apt-get install redis-server
+redis-server
+```
+
+**macOS:**
+```bash
+brew install redis
+brew services start redis
+```
+
+**Linux:**
+```bash
+sudo apt-get install redis-server
+sudo service redis-server start
+```
+
+Verify Redis is running:
+```bash
+redis-cli ping   # Expected output: PONG
+```
+
+---
+
+### Step 4 — Install & start MailHog
+
+MailHog is a local SMTP server with a web inbox. Emails sent through it
+never leave your machine.
+
+**Download:** https://github.com/mailhog/MailHog/releases
+
+Pick the binary for your OS:
+- Windows: `MailHog_windows_amd64.exe`
+- macOS:   `MailHog_darwin_amd64`
+- Linux:   `MailHog_linux_amd64`
+
+**Start MailHog:**
+```bash
+# Windows PowerShell (from the folder containing the binary):
+.\MailHog_windows_amd64.exe
+
+# macOS/Linux:
+chmod +x ./MailHog_linux_amd64
+./MailHog_linux_amd64
+```
+
+MailHog listens on:
+- **SMTP:** `localhost:1025` — receives emails from the application
+- **Web UI:** http://localhost:8025 — view the inbox in your browser
+
+> MailHog requires no username or password. Any SMTP credentials you
+> provide are accepted silently.
+
+---
+
+### Step 5 — Start services in order
+
+Open **four separate terminals**, all from the `backend/` directory:
+
+**Terminal 1 — Flask API:**
+```bash
+python app.py
+```
+
+**Terminal 2 — Celery Worker:**
+```bash
+python run_worker.py
+```
+
+**Terminal 3 — Celery Beat (scheduler):**
+```bash
+python run_beat.py
+```
+
+**Terminal 4 — MailHog:**
+```bash
+.\MailHog_windows_amd64.exe
+```
+
+---
+
+### Step 6 — Verify the stack
+
+| Check | Command / URL | Expected Result |
+|---|---|---|
+| Redis running | `redis-cli ping` | `PONG` |
+| Flask API | `http://localhost:5000/api/health` | `{"status": "ok"}` |
+| MailHog inbox | `http://localhost:8025` | Empty inbox |
+| Trigger reminder task manually | see below | Email appears in MailHog |
+
+**Manually trigger an interview reminder (without waiting for Beat):**
+```bash
+# From backend/ directory — requires Redis + Celery Worker running:
+python -m celery -A celery_app call tasks.interview_reminders.send_interview_reminders
+```
+
+**Or run the standalone test script (no Redis/Celery required):**
+```bash
+python -X utf8 c:\Users\pooja\.gemini\antigravity-ide\brain\631b7672-19f1-447d-aa6d-f1aaa69ea2a6\scratch\test_interview_reminders.py
+```
+Then open http://localhost:8025 and look for emails from `noreply@placement-portal.local`.
 
 ---
 
@@ -70,10 +209,11 @@ Copy `.env.example` to `.env` and fill in your values:
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
 | `CELERY_BROKER_URL` | Same as REDIS_URL | Celery message broker |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/1` | Celery result storage |
+| `MAIL_SERVER` | `smtp.gmail.com` | SMTP server hostname (use `localhost` for MailHog) |
+| `MAIL_PORT` | `587` | SMTP port (use `1025` for MailHog) |
+| `MAIL_USE_TLS` | `true` | SMTP TLS (use `false` for MailHog) |
 | `MAIL_USERNAME` | *(blank)* | SMTP email — leave blank for console mode |
 | `MAIL_PASSWORD` | *(blank)* | SMTP password / App Password |
-| `MAIL_SERVER` | `smtp.gmail.com` | SMTP server hostname |
-| `MAIL_PORT` | `587` | SMTP port |
 | `GCHAT_WEBHOOK_URL` | *(blank)* | Google Chat space webhook URL |
 | `SMS_PROVIDER` | `console` | SMS mode: `console` or `twilio` |
 | `TWILIO_ACCOUNT_SID` | *(blank)* | Twilio credentials |
@@ -111,7 +251,28 @@ python run_beat.py
 
 ## Background Tasks Reference
 
-### 1. Interview Reminders (`tasks/interview_reminders.py`)
+### 1. Drive Deadline Reminders (`tasks/drive_reminders.py`)
+
+| Property | Value |
+|---|---|
+| Task name | `tasks.drive_reminders.send_drive_deadline_reminders` |
+| Schedule | Daily at **09:00 UTC** (Celery Beat) |
+| Retries | Up to 3 times, 5-minute delay |
+
+**What it does:**
+- Queries all open placement drives with a deadline today or tomorrow.
+- Finds eligible active students who have **not** applied.
+- Sends **Email** reminder to these students.
+- Logs to `ReminderHistory` database table to prevent duplicate emails.
+
+**Trigger manually:**
+```bash
+celery -A celery_app call tasks.drive_reminders.send_drive_deadline_reminders
+```
+
+---
+
+### 2. Interview Reminders (`tasks/interview_reminders.py`)
 
 | Property | Value |
 |---|---|
@@ -132,7 +293,7 @@ celery -A celery_app call tasks.interview_reminders.send_interview_reminders
 
 ---
 
-### 2. Monthly Placement Report (`tasks/monthly_reports.py`)
+### 3. Monthly Placement Report (`tasks/monthly_reports.py`)
 
 | Property | Value |
 |---|---|
@@ -254,10 +415,9 @@ the Redis status.
 ## Notification Services
 
 ### Email
-- **Console mode** (default): Email content is printed to the log.
-  No SMTP server required.
-- **SMTP mode**: Set `MAIL_USERNAME` and `MAIL_PASSWORD` in `.env`.
-  Works with Gmail (use an App Password, not your regular password).
+- **Console mode** (default): Email content is printed to the log. No SMTP server required.
+- **MailHog mode** (local testing): Set `MAIL_SERVER=localhost`, `MAIL_PORT=1025`, `MAIL_USE_TLS=false`. You can view the emails in the MailHog web UI (usually `http://localhost:8025`).
+- **SMTP mode** (production): Set `MAIL_SERVER=smtp.gmail.com` and provide `MAIL_USERNAME` / `MAIL_PASSWORD`. Use an App Password for Gmail.
 
 ### Google Chat
 - Leave `GCHAT_WEBHOOK_URL` blank to skip GChat notifications.

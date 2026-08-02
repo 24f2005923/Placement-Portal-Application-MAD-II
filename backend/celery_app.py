@@ -131,6 +131,18 @@ def create_celery_app(flask_app):
                 'task': 'tasks.monthly_reports.generate_monthly_report',
                 'schedule': crontab(hour=6, minute=0, day_of_month=1),
             },
+
+            # Daily placement drive deadline reminder — fires every day at 09:00 UTC.
+            'daily-drive-reminders': {
+                'task': 'tasks.drive_reminders.send_drive_deadline_reminders',
+                'schedule': crontab(hour=9, minute=0),
+            },
+
+            # Weekly login reminder — fires every Monday at 10:00 UTC.
+            'weekly-login-reminder': {
+                'task': 'tasks.announcements.weekly_login_reminder',
+                'schedule': crontab(hour=10, minute=0, day_of_week='monday'),
+            },
         },
 
         # Discover tasks from these modules automatically.
@@ -138,6 +150,8 @@ def create_celery_app(flask_app):
             'tasks.interview_reminders',
             'tasks.monthly_reports',
             'tasks.csv_exports',
+            'tasks.drive_reminders',
+            'tasks.announcements',
         ],
     )
 

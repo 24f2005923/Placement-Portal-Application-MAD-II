@@ -71,7 +71,6 @@
                 <th>Applied Date</th>
                 <th>Resume</th>
                 <th>Current Status</th>
-                <th class="text-end">Manage Status</th>
               </tr>
             </thead>
             <tbody>
@@ -92,36 +91,21 @@
                   <span class="small text-muted">{{ app.applied_at || 'N/A' }}</span>
                 </td>
                 <td>
-                  <a
+                  <button
                     v-if="app.resume_url"
-                    :href="app.resume_url"
-                    target="_blank"
                     class="btn btn-sm btn-outline-primary rounded-pill px-3"
+                    :disabled="openingResume === app.resume_path"
+                    @click="openAdminResume(app.resume_path)"
                   >
-                    <i class="bi bi-file-earmark-pdf me-1"></i>View Resume
-                  </a>
+                    <span v-if="openingResume === app.resume_path" class="spinner-border spinner-border-sm me-1"></span>
+                    <i v-else class="bi bi-file-earmark-pdf me-1"></i>View Resume
+                  </button>
                   <span v-else class="text-muted small">Not Uploaded</span>
                 </td>
                 <td>
                   <span class="badge rounded-pill px-3 py-2" :class="getStatusBadgeClass(app.application_status)">
                     {{ app.stage || app.application_status }}
                   </span>
-                </td>
-                <td class="text-end">
-                  <div class="d-inline-block">
-                    <select
-                      :value="app.application_status"
-                      class="form-select form-select-sm fw-medium border-secondary"
-                      :disabled="updatingId === app.id"
-                      @change="handleStatusChange(app.id, $event.target.value)"
-                    >
-                      <option value="applied">Applied</option>
-                      <option value="shortlisted">Shortlisted</option>
-                      <option value="interview">Interview</option>
-                      <option value="selected">Selected</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </div>
                 </td>
               </tr>
             </tbody>
@@ -153,6 +137,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { adminAPI } from '@/api/admin'
+import httpClient from '@/api/axios'
 
 const applications = ref([])
 const loading = ref(true)
@@ -160,7 +145,7 @@ const search = ref('')
 const statusFilter = ref('')
 const msg = ref('')
 const error = ref('')
-const updatingId = ref(null)
+const openingResume = ref(null)
 let searchTimeout = null
 
 const pagination = ref({
@@ -225,35 +210,28 @@ function resetFilters() {
   fetchApplications(1)
 }
 
+async function openAdminResume(resumePath) {
+  if (!resumePath) return
+  openingResume.value = resumePath
+  try {
+    const response = await httpClient.get('/api/admin/resumes/' + resumePath, {
+      responseType: 'blob'
+    })
+    const blobUrl = URL.createObjectURL(response.data)
+    window.open(blobUrl, '_blank')
+  } catch (err) {
+    error.value = 'Could not open resume. The file may no longer exist.'
+  } finally {
+    openingResume.value = null
+  }
+}
+
 function changePage(newPage) {
   if (newPage >= 1 && newPage <= pagination.value.total_pages) {
     fetchApplications(newPage)
   }
 }
 
-async function handleStatusChange(appId, newStatus) {
-  updatingId.value = appId
-  msg.value = ''
-  error.value = ''
-  try {
-    const { data } = await adminAPI.setApplicationStatus(appId, newStatus)
-    msg.value = data.message || `Application status updated to ${newStatus}.`
-    // Update local state item
-    const target = applications.value.find((a) => a.id === appId)
-    if (target) {
-      target.application_status = newStatus
-      if (data.application) {
-        target.stage = data.application.stage
-      }
-    }
-    setTimeout(() => { msg.value = '' }, 3000)
-  } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to update application status.'
-    fetchApplications(pagination.value.current_page)
-  } finally {
-    updatingId.value = null
-  }
-}
 
 onMounted(() => {
   fetchApplications(1)

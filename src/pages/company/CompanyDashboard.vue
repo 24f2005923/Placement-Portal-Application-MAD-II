@@ -1,7 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import StatCard from '@/components/common/StatCard.vue'
-import ChartPlaceholder from '@/components/common/ChartPlaceholder.vue'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import { companyAPI } from '@/api/company'
@@ -9,6 +8,18 @@ import { companyAPI } from '@/api/company'
 const stats = ref([])
 const applications = ref([])
 const loading = ref(true)
+
+// Derive simple funnel counts from the stats cards the API already returns
+const funnelData = computed(() => {
+  const shortlisted = stats.value.find(s => s.label === 'Shortlisted Students')
+  const selected    = stats.value.find(s => s.label === 'Selected Students')
+  const total       = stats.value.find(s => s.label === 'Applications Received')
+  return {
+    total:       parseInt(total?.value       ?? '0', 10),
+    shortlisted: parseInt(shortlisted?.value ?? '0', 10),
+    selected:    parseInt(selected?.value    ?? '0', 10)
+  }
+})
 
 const headers = ['Drive', 'Student', 'Status', 'Stage']
 const columns = ['drive_title', 'student_name', 'application_status', 'stage']
@@ -33,7 +44,32 @@ onMounted(async () => {
         <StatCard v-bind="item" />
       </div>
       <div class="col-12 col-xl-7">
-        <ChartPlaceholder title="Application Funnel" subtitle="Applications received, shortlist rate, and final selections." />
+        <SectionCard title="Application Pipeline" subtitle="Funnel summary across all your placement drives">
+          <div v-if="funnelData.total === 0" class="text-center text-muted py-4">
+            <i class="bi bi-funnel fs-2 d-block mb-2 text-secondary"></i>
+            No applications received yet.
+          </div>
+          <div v-else class="row g-3 text-center">
+            <div class="col-4">
+              <div class="border rounded-3 p-3">
+                <div class="fs-3 fw-bold text-secondary">{{ funnelData.total }}</div>
+                <div class="small text-muted">Applied</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="border rounded-3 p-3 border-warning">
+                <div class="fs-3 fw-bold text-warning">{{ funnelData.shortlisted }}</div>
+                <div class="small text-muted">Shortlisted</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="border rounded-3 p-3 border-success">
+                <div class="fs-3 fw-bold text-success">{{ funnelData.selected }}</div>
+                <div class="small text-muted">Selected</div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
       </div>
       <div class="col-12 col-xl-5">
         <SectionCard title="Latest Applications" subtitle="Recent student submissions for your drives">
