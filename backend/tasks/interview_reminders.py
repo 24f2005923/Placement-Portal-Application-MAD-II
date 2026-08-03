@@ -30,6 +30,7 @@ from models.interview_reminder_history import InterviewReminderHistory
 from services.email_service import send_email
 from services.gchat_service import send_gchat_message
 from services.sms_service import get_sms_provider
+from utils.email_templates import EmailTemplateBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ def send_interview_reminders(self):
 
             # ── 1. Email reminder ─────────────────────────────────
             email_subject = f"Interview Reminder: {interview_info['company']} — {interview_info['interview_date']}"
-            email_body    = _build_email_body(user.name, interview_info)
+            email_body    = EmailTemplateBuilder.build_interview_reminder_from_info(user.name, interview_info)
             send_email(to=user.email, subject=email_subject, body_html=email_body)
 
             # ── 2. Google Chat notification ───────────────────────
@@ -177,7 +178,6 @@ def send_interview_reminders(self):
         raise self.retry(exc=exc)
 
 
-# ── Private helpers ───────────────────────────────────────────────
 
 def _build_interview_info(interview, application) -> dict:
     """
@@ -201,59 +201,3 @@ def _build_interview_info(interview, application) -> dict:
     }
 
 
-def _build_email_body(student_name: str, info: dict) -> str:
-    """
-    Build an HTML email body for the interview reminder.
-
-    Returns a styled HTML string.
-    """
-    link_section = ''
-    if info['mode'] == 'online' and info['link']:
-        link_section = f'<p><strong>Meeting Link:</strong> <a href="{info["link"]}">{info["link"]}</a></p>'
-
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body        {{ font-family: Arial, sans-serif; color: #333; background: #f5f5f5; margin: 0; padding: 0; }}
-        .container  {{ max-width: 600px; margin: 30px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-        .header     {{ background: #4f46e5; color: #fff; padding: 28px 32px; }}
-        .header h1  {{ margin: 0; font-size: 22px; }}
-        .body       {{ padding: 28px 32px; }}
-        .body p     {{ line-height: 1.6; }}
-        .info-box   {{ background: #f0f0ff; border-left: 4px solid #4f46e5; padding: 16px 20px; border-radius: 4px; margin: 20px 0; }}
-        .info-box p {{ margin: 6px 0; }}
-        .footer     {{ background: #f9f9f9; padding: 16px 32px; font-size: 12px; color: #888; border-top: 1px solid #eee; }}
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🗓️ Interview Reminder</h1>
-        </div>
-        <div class="body">
-          <p>Dear <strong>{student_name}</strong>,</p>
-          <p>This is a friendly reminder that you have an upcoming interview scheduled.</p>
-          <div class="info-box">
-            <p><strong>Company:</strong> {info['company']}</p>
-            <p><strong>Role:</strong> {info['role']}</p>
-            <p><strong>Round:</strong> {info['round_name']}</p>
-            <p><strong>Date:</strong> {info['interview_date']}</p>
-            <p><strong>Time:</strong> {info['interview_time']}</p>
-            <p><strong>Mode:</strong> {info['mode'].title()}</p>
-            {link_section}
-            {'<p><strong>Remarks:</strong> ' + info['remarks'] + '</p>' if info['remarks'] else ''}
-          </div>
-          <p>Please be on time and make sure your internet connection is stable (for online interviews).</p>
-          <p><strong>Best of luck!</strong></p>
-        </div>
-        <div class="footer">
-          <p>This is an automated notification from the University Placement Portal.
-             Please do not reply to this email.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """

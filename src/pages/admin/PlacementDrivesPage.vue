@@ -2,11 +2,16 @@
 import { ref, onMounted } from 'vue'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import FeedbackAlert from '@/components/common/FeedbackAlert.vue'
 import { adminAPI } from '@/api/admin'
+import { usePageFeedback } from '@/composables/usePageFeedback'
 
 const drives = ref([])
 const loading = ref(false)
-const actionMsg = ref('')
+const { successMsg, errorMsg, showSuccess, showError, clearMessages } = usePageFeedback()
 
 const headers = ['Company', 'Role', 'Package', 'Eligibility', 'Deadline', 'Openings', 'Status', 'Actions']
 const columns = ['company_name', 'job_role', 'package', 'eligibility', 'deadline', 'openings', 'status', 'actions']
@@ -17,7 +22,7 @@ async function fetchDrives() {
     const { data } = await adminAPI.getDrives()
     drives.value = data.drives || []
   } catch (err) {
-    console.error(err)
+    showError(err.response?.data?.error || 'Failed to fetch drives.')
   } finally {
     loading.value = false
   }
@@ -25,12 +30,11 @@ async function fetchDrives() {
 
 async function approveDrive(drive) {
   try {
-    await adminAPI.approveDrive(drive.id)
-    drive.status = 'open'
-    actionMsg.value = `Drive for ${drive.company_name} approved and opened.`
-    setTimeout(() => { actionMsg.value = '' }, 3000)
+    const { data } = await adminAPI.approveDrive(drive.id)
+    drive.status = data.drive.status
+    showSuccess(`Drive for ${drive.company_name} approved.`)
   } catch (err) {
-    console.error(err)
+    showError(err.response?.data?.error || 'Failed to approve drive.')
   }
 }
 
@@ -38,10 +42,9 @@ async function closeDrive(drive) {
   try {
     await adminAPI.closeDrive(drive.id)
     drive.status = 'closed'
-    actionMsg.value = `Drive for ${drive.company_name} closed. New applications disabled.`
-    setTimeout(() => { actionMsg.value = '' }, 3000)
+    showSuccess(`Drive for ${drive.company_name} closed.`)
   } catch (err) {
-    console.error(err)
+    showError(err.response?.data?.error || 'Failed to close drive.')
   }
 }
 
@@ -49,10 +52,9 @@ async function rejectDrive(drive) {
   try {
     await adminAPI.rejectDrive(drive.id)
     drive.status = 'rejected'
-    actionMsg.value = `Drive for ${drive.company_name} rejected.`
-    setTimeout(() => { actionMsg.value = '' }, 3000)
+    showSuccess(`Drive for ${drive.company_name} rejected.`)
   } catch (err) {
-    console.error(err)
+    showError(err.response?.data?.error || 'Failed to reject drive.')
   }
 }
 
@@ -60,18 +62,23 @@ onMounted(fetchDrives)
 </script>
 
 <template>
-  <SectionCard title="Placement Drive Management" subtitle="Approval screen, status control, and drive posting management">
-    <div v-if="actionMsg" class="alert alert-success alert-dismissible fade show mb-3" role="alert">
-      <i class="bi bi-check-circle me-2"></i>{{ actionMsg }}
-      <button type="button" class="btn-close" @click="actionMsg = ''"></button>
-    </div>
-    <div v-if="loading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+  <SectionCard title="Placement Drives" subtitle="Monitor and manage all campus placement drives">
+    <FeedbackAlert 
+      :success="successMsg"
+      :error="errorMsg"
+      @clear-success="clearMessages"
+      @clear-error="clearMessages"
+    />
+    
+    <LoadingSpinner v-if="loading" />
+    <EmptyState 
+      v-else-if="drives.length === 0" 
+      title="No placement drives found." 
+      icon="bi-briefcase"
+    />
     <DataTable v-else :headers="headers" :columns="columns" :rows="drives">
       <template #status="{ row }">
-        <span class="badge rounded-pill"
-          :class="row.status === 'open' ? 'badge-soft-success' : row.status === 'pending' ? 'badge-soft-warning' : row.status === 'closed' ? 'badge-soft-secondary' : 'badge-soft-danger'">
-          {{ row.status }}
-        </span>
+        <StatusBadge :status="row.status" />
       </template>
       <template #actions="{ row }">
         <div class="btn-group btn-group-sm">

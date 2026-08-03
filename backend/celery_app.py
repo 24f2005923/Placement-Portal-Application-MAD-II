@@ -1,6 +1,6 @@
 """
 celery_app.py — Celery application factory
-──────────────────────────────────────────
+
 Creates and configures the Celery application so it shares the
 same Flask application context.  This lets Celery tasks use
 SQLAlchemy models, Flask config, and other Flask extensions exactly
@@ -99,7 +99,7 @@ def create_celery_app(flask_app):
         task_cls=ContextTask,
     )
 
-    # ── Celery configuration ──────────────────────────────────────
+    # --- Celery configuration ---
     celery.conf.update(
         # How long task results are stored in Redis.
         result_expires=flask_app.config['CELERY_RESULT_EXPIRES'],
@@ -117,7 +117,7 @@ def create_celery_app(flask_app):
         task_acks_late=True,
         task_reject_on_worker_lost=True,
 
-        # ── Beat Schedule — periodic tasks ────────────────────────
+        # --- Beat Schedule — periodic tasks ---
         beat_schedule={
             # Daily interview reminder — fires every day at 08:00 UTC.
             # Notifies students who have interviews in the next 24–48 hours.
@@ -158,7 +158,7 @@ def create_celery_app(flask_app):
     return celery
 
 
-# ── Module-level Celery instance ─────────────────────────────────
+# --- Module-level Celery instance ---
 # This is what the Celery CLI (and run_worker.py) imports.
 # The Flask app is created here so the worker process has a full
 # app context available from the start.

@@ -38,7 +38,7 @@
       </template>
 
       <template #status="{ row }">
-        <span class="badge rounded-pill" :class="row.status === 'open' ? 'badge-soft-success' : 'badge-soft-secondary'">
+        <span class="badge rounded-pill" :class="driveBadge(row.status)">
           {{ row.status }}
         </span>
       </template>
@@ -63,6 +63,7 @@ import { ref, onMounted } from 'vue'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import { studentAPI } from '@/api/student'
+import { driveBadge } from '@/utils/statusMeta'
 
 const drives = ref([])
 const loading = ref(false)

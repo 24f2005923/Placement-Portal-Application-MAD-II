@@ -73,3 +73,12 @@ def validate_date_format(date_str, field_name="Date"):
         return date.fromisoformat(str(date_str).strip())
     except ValueError:
         raise ValidationError(f"{field_name} format should be YYYY-MM-DD")
+
+def check_required_fields(payload, required_fields):
+    """
+    Checks if all required fields are present and not empty in the payload.
+    Raises ValidationError if any are missing.
+    """
+    missing = [f for f in required_fields if not str(payload.get(f, '')).strip()]
+    if missing:
+        raise ValidationError(f"Missing required fields: {', '.join(missing)}")

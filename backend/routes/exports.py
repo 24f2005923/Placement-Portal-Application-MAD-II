@@ -17,7 +17,7 @@ from flask import Blueprint, jsonify, send_from_directory, request
 from flask_jwt_extended import get_jwt
 
 from middleware.auth_middleware import admin_required
-from utils.task_runner import dispatch_task
+from utils.task_runner import async_result_response, dispatch_task, task_dispatch_response
 
 logger = logging.getLogger(__name__)
 
@@ -50,23 +50,15 @@ def trigger_student_export():
 
     # Dispatch the Celery task asynchronously (returns immediately)
     dispatched = dispatch_task(export_students_csv, requested_by_email=notify_email)
-    result = dispatched['result'] or {}
-    filename = result.get('filename')
-
     logger.info('Student CSV export dispatched: task_id=%s, notify=%s', dispatched['task_id'], notify_email)
 
-    return jsonify({
-        'message': (
-            'Student export job has been queued. You will be notified when it completes.'
-            if dispatched['queued']
-            else 'Student export completed successfully.'
-        ),
-        'task_id': dispatched['task_id'],
-        'status_url': f"/api/admin/export/status/{dispatched['task_id']}",
-        'state': 'PENDING' if dispatched['queued'] else 'SUCCESS',
-        'result': result,
-        'download_url': f'/api/admin/export/download/{filename}' if filename else None,
-    }), 202 if dispatched['queued'] else 200
+    return task_dispatch_response(
+        dispatched,
+        queued_message='Student export job has been queued. You will be notified when it completes.',
+        completed_message='Student export completed successfully.',
+        status_url_prefix='/api/admin/export/status',
+        download_url_builder=_export_download_url,
+    )
 
 
 @export_bp.route('/companies', methods=['POST'])
@@ -90,23 +82,15 @@ def trigger_company_export():
     notify_email = payload.get('notify_email') or jwt_claims.get('email', '')
 
     dispatched = dispatch_task(export_companies_csv, requested_by_email=notify_email)
-    result = dispatched['result'] or {}
-    filename = result.get('filename')
-
     logger.info('Company CSV export dispatched: task_id=%s, notify=%s', dispatched['task_id'], notify_email)
 
-    return jsonify({
-        'message': (
-            'Company export job has been queued. You will be notified when it completes.'
-            if dispatched['queued']
-            else 'Company export completed successfully.'
-        ),
-        'task_id': dispatched['task_id'],
-        'status_url': f"/api/admin/export/status/{dispatched['task_id']}",
-        'state': 'PENDING' if dispatched['queued'] else 'SUCCESS',
-        'result': result,
-        'download_url': f'/api/admin/export/download/{filename}' if filename else None,
-    }), 202 if dispatched['queued'] else 200
+    return task_dispatch_response(
+        dispatched,
+        queued_message='Company export job has been queued. You will be notified when it completes.',
+        completed_message='Company export completed successfully.',
+        status_url_prefix='/api/admin/export/status',
+        download_url_builder=_export_download_url,
+    )
 
 
 @export_bp.route('/status/<task_id>', methods=['GET'])
@@ -129,34 +113,8 @@ def get_export_status(task_id):
     """
     from celery_app import celery
 
-    # AsyncResult wraps the Redis result backend lookup
     task_result = celery.AsyncResult(task_id)
-    state       = task_result.state
-
-    response = {
-        'task_id': task_id,
-        'state':   state,
-    }
-
-    if state == 'SUCCESS':
-        result = task_result.result or {}
-        response['result']  = result
-        # Provide a ready-to-use download URL if the file is ready
-        filename = result.get('filename')
-        if filename:
-            response['download_url'] = f'/api/admin/export/download/{filename}'
-
-    elif state == 'FAILURE':
-        # task_result.result holds the exception when state is FAILURE
-        response['error'] = str(task_result.result)
-
-    elif state == 'PENDING':
-        response['message'] = 'Task is waiting in the queue.'
-
-    elif state == 'STARTED':
-        response['message'] = 'Task is currently running.'
-
-    return jsonify(response), 200
+    return async_result_response(task_id, task_result, download_url_builder=_export_download_url)
 
 
 @export_bp.route('/download/<filename>', methods=['GET'])
@@ -227,3 +185,8 @@ def list_export_files():
     files_info.sort(key=lambda x: x['created_at'], reverse=True)
 
     return jsonify({'files': files_info}), 200
+
+
+def _export_download_url(result):
+    filename = (result or {}).get('filename')
+    return f'/api/admin/export/download/{filename}' if filename else None

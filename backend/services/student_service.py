@@ -7,6 +7,7 @@ from services.file_service import save_resume, delete_resume
 from utils.stats import create_stat_item
 from utils.repository import BaseRepository
 from utils.email_templates import EmailTemplateBuilder
+from utils.student_updater import apply_student_profile_fields
 
 class StudentService:
     """Service layer handling student workflows and application tracking."""
@@ -42,23 +43,10 @@ class StudentService:
 
     @classmethod
     def update_profile(cls, user_id, payload):
+        """Update a student's own profile from their request payload."""
         student = cls.get_student_by_user(user_id)
-        
-        if 'name' in payload:
-            student.user.name = payload['name']
-        if 'email' in payload:
-            student.user.email = payload['email'].lower().strip()
-
-        fields_list = ['department', 'year', 'cgpa', 'phone', 'address',
-                       'marks_10th', 'marks_12th', 'backlogs', 'graduation_year', 'preferred_role']
-                       
-        for key in fields_list:
-            if key in payload:
-                setattr(student, key, payload[key])
-
-        if 'skills' in payload:
-            student.save_skills(payload['skills'])
-
+        # Delegate field updates to the shared helper — field list lives in student_updater.py
+        apply_student_profile_fields(student, payload)
         db.session.commit()
         return student.to_dict()
 
@@ -171,6 +159,24 @@ class StudentService:
             Application.student_id == student.id
         ).order_by(Application.applied_at.desc()).all()
         return [app.to_dict(include_student=False) for app in apps]
+
+    @classmethod
+    def get_application_export_rows(cls, user_id):
+        student = cls.get_student_by_user(user_id)
+        apps = db.session.query(Application).filter(
+            Application.student_id == student.id
+        ).order_by(Application.applied_at.desc()).all()
+
+        return [
+            {
+                'Student ID': student.id,
+                'Company Name': app.drive.company.company_name if app.drive and app.drive.company else '',
+                'Drive Title': app.drive.title if app.drive else '',
+                'Application Status': app.application_status,
+                'Application Date': app.applied_at.strftime('%Y-%m-%d %H:%M') if app.applied_at else '',
+            }
+            for app in apps
+        ]
 
     @classmethod
     def get_my_interviews(cls, user_id):

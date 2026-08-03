@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import NotificationsDropdown from './NotificationsDropdown.vue'
 import UserProfileDropdown from './UserProfileDropdown.vue'
 
 const emit = defineEmits(['toggle-sidebar'])
@@ -58,7 +57,6 @@ const title = computed(() => {
       </div>
 
       <div class="d-flex align-items-center gap-2 gap-lg-3">
-        <NotificationsDropdown />
         <UserProfileDropdown />
       </div>
     </div>

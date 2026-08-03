@@ -25,6 +25,7 @@ from models.student import Student
 from models.application import Application
 from models.reminder_history import ReminderHistory
 from services.email_service import send_email
+from utils.email_templates import EmailTemplateBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +103,17 @@ def send_drive_deadline_reminders(self):
                 if already_reminded:
                     continue  # Already sent
 
-                # Send email
+                # Build the email using the centralized template builder
                 company_name = drive.company.company_name if drive.company else 'Unknown Company'
+                deadline_str = drive.deadline.strftime('%d %B %Y') if drive.deadline else 'TBD'
                 subject = f"Deadline Approaching: Apply for {company_name} — {drive.job_role}"
-                body = _build_drive_reminder_email(student.user.name, drive)
+                body = EmailTemplateBuilder.build_drive_deadline_reminder(
+                    student_name=student.user.name,
+                    company_name=company_name,
+                    job_role=drive.job_role,
+                    package=drive.package or 'Not disclosed',
+                    deadline_str=deadline_str,
+                )
                 
                 email_sent = send_email(to=student.user.email, subject=subject, body_html=body)
                 
@@ -129,53 +137,3 @@ def send_drive_deadline_reminders(self):
         db.session.rollback()
         raise self.retry(exc=exc)
 
-
-def _build_drive_reminder_email(student_name: str, drive: PlacementDrive) -> str:
-    """
-    Build an HTML email body for the drive deadline reminder.
-    """
-    company_name = drive.company.company_name if drive.company else 'Unknown Company'
-    deadline_str = drive.deadline.strftime('%d %B %Y') if drive.deadline else 'TBD'
-    
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body        {{ font-family: Arial, sans-serif; color: #333; background: #f5f5f5; margin: 0; padding: 0; }}
-        .container  {{ max-width: 600px; margin: 30px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-        .header     {{ background: #dc2626; color: #fff; padding: 28px 32px; }}
-        .header h1  {{ margin: 0; font-size: 22px; }}
-        .body       {{ padding: 28px 32px; }}
-        .body p     {{ line-height: 1.6; }}
-        .info-box   {{ background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px 20px; border-radius: 4px; margin: 20px 0; }}
-        .info-box p {{ margin: 6px 0; }}
-        .footer     {{ background: #f9f9f9; padding: 16px 32px; font-size: 12px; color: #888; border-top: 1px solid #eee; }}
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>⏳ Placement Drive Deadline Approaching</h1>
-        </div>
-        <div class="body">
-          <p>Dear <strong>{student_name}</strong>,</p>
-          <p>This is a quick reminder that the application deadline for an active placement drive is fast approaching. You have not submitted an application yet.</p>
-          <div class="info-box">
-            <p><strong>Company:</strong> {company_name}</p>
-            <p><strong>Role:</strong> {drive.job_role}</p>
-            <p><strong>Package:</strong> {drive.package or 'Not disclosed'}</p>
-            <p><strong>Deadline:</strong> {deadline_str}</p>
-          </div>
-          <p>If you wish to be considered for this opportunity, please log in to your student dashboard and submit your application before the deadline.</p>
-          <p><strong>Best of luck!</strong></p>
-        </div>
-        <div class="footer">
-          <p>This is an automated notification from the University Placement Portal.
-             Please do not reply to this email.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """

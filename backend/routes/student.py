@@ -1,4 +1,6 @@
-from flask import Blueprint, request, send_from_directory
+import os
+
+from flask import Blueprint, request, send_from_directory, current_app
 from flask_jwt_extended import get_jwt_identity
 from middleware.auth_middleware import student_required
 from services.student_service import StudentService
@@ -6,6 +8,7 @@ from cache.decorators import cache_response
 from utils.cache_manager import CacheManager
 from utils.request_helpers import json_payload, query_text
 from utils.responses import success_response, error_response, created_response
+from utils.task_runner import async_result_response, dispatch_task, task_dispatch_response
 
 student_bp = Blueprint('student_routes', __name__, url_prefix='/api/student')
 
@@ -127,11 +130,82 @@ def get_my_applications():
     apps = StudentService.get_my_applications(uid)
     return success_response({'applications': apps})
 
-@student_bp.route('/applications/<int:app_id>/offer-letter', methods=['GET'])
+@student_bp.route('/applications/export', methods=['POST'])
 @student_required
+def export_my_applications():
+    from tasks.csv_exports import export_student_applications_csv
+
+    uid = get_jwt_identity()
+    student = StudentService.get_student_by_user(uid)
+    notify_email = student.user.email if student.user else None
+
+    dispatched = dispatch_task(
+        export_student_applications_csv,
+        user_id=int(uid),
+        requested_by_email=notify_email,
+    )
+
+    return task_dispatch_response(
+        dispatched,
+        queued_message='Application history CSV export has been queued.',
+        completed_message='Application history CSV export completed successfully.',
+        status_url_prefix='/api/student/applications/export/status',
+        download_url_builder=_student_application_export_download_url,
+    )
+
+@student_bp.route('/applications/export/status/<task_id>', methods=['GET'])
+@student_required
+def get_application_export_status(task_id):
+    from celery_app import celery
+
+    task_result = celery.AsyncResult(task_id)
+    return async_result_response(
+        task_id,
+        task_result,
+        download_url_builder=_student_application_export_download_url,
+        pending_message='Application history CSV export is queued / processing...',
+    )
+
+@student_bp.route('/applications/export/download/<filename>', methods=['GET'])
+@student_required
+def download_application_export(filename):
+    uid = get_jwt_identity()
+    student = StudentService.get_student_by_user(uid)
+
+    expected_prefix = f'student_applications_{student.id}_'
+    if not filename.endswith('.csv') or not filename.startswith(expected_prefix):
+        return error_response('Export file not found', 404)
+
+    exports_dir = current_app.config['EXPORTS_FOLDER']
+    file_path = os.path.join(exports_dir, filename)
+    if not os.path.isfile(file_path):
+        return error_response('Export file not found', 404)
+
+    return send_from_directory(exports_dir, filename, as_attachment=True)
+
+@student_bp.route('/applications/<int:app_id>/offer-letter', methods=['GET'])
 def download_offer_letter(app_id):
     from flask import Response
-    uid = get_jwt_identity()
+    from flask_jwt_extended import decode_token
+
+    uid = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+    else:
+        token = request.args.get('token')
+
+    if token:
+        try:
+            decoded_token = decode_token(token)
+        except Exception:
+            return error_response('Invalid or expired token', 401)
+        if decoded_token.get('role') != 'student':
+            return error_response('Access denied: Student account required', 403)
+        uid = decoded_token.get('sub')
+    else:
+        return error_response('Missing authorization token', 401)
+
     html_doc, filename = StudentService.generate_offer_letter(uid, app_id)
     
     response = Response(html_doc, mimetype='text/html')
@@ -151,3 +225,7 @@ def get_placement_history():
     uid = get_jwt_identity()
     history = StudentService.get_placement_history(uid)
     return success_response({'history': history})
+
+def _student_application_export_download_url(result):
+    filename = (result or {}).get('filename')
+    return f'/api/student/applications/export/download/{filename}' if filename else None

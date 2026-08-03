@@ -6,7 +6,7 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 from exceptions import Forbidden, ValidationError, NotFound, Conflict
-from utils.validators import validate_phone, validate_email, validate_password
+from utils.validators import validate_phone, validate_email, validate_password, check_required_fields
 
 logger = logging.getLogger('auth_service')
 if not logger.handlers:
@@ -123,10 +123,8 @@ class AuthService:
     @classmethod
     def register_student(cls, payload):
         """Validates payload and registers a new student user and profile."""
-        required = ['name', 'email', 'password', 'register_number', 'department']
-        missing = [key for key in required if not payload.get(key) or not str(payload.get(key)).strip()]
-        if missing:
-            raise ValidationError(f"Missing required fields: {', '.join(missing)}")
+        req = ['name', 'email', 'password', 'register_number', 'department', 'year']
+        check_required_fields(payload, req)
 
         target_email = validate_email(payload['email'])
         validated_pwd = validate_password(payload['password'])
@@ -168,10 +166,8 @@ class AuthService:
     @classmethod
     def register_company(cls, payload):
         """Validates payload and registers a new company user and profile."""
-        required = ['company_name', 'email', 'password', 'phone']
-        missing = [key for key in required if not payload.get(key) or not str(payload.get(key)).strip()]
-        if missing:
-            raise ValidationError(f"Missing required fields: {', '.join(missing)}")
+        req = ['company_name', 'email', 'password', 'industry', 'city', 'contact_email']
+        check_required_fields(payload, req)
 
         target_email = validate_email(payload['email'])
         clean_phone = validate_phone(payload['phone'], field_name="Phone number")

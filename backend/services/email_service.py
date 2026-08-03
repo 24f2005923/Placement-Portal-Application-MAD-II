@@ -19,14 +19,17 @@ Console mode:
 
 import logging
 import smtplib
+import os
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
+from email import encoders
 from flask import current_app
 
 logger = logging.getLogger(__name__)
 
 
-def send_email(to: str, subject: str, body_html: str) -> bool:
+def send_email(to: str, subject: str, body_html: str, attachments: list = None) -> bool:
     """
     Send an HTML email to one recipient.
 
@@ -34,6 +37,7 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
         to:        Recipient email address.
         subject:   Email subject line.
         body_html: HTML content for the email body.
+        attachments: Optional list of file paths to attach.
 
     Returns:
         True if the email was sent (or logged in console mode),
@@ -61,11 +65,31 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
         sender   = current_app.config['MAIL_SENDER']
 
         # Build the MIME message.
-        message = MIMEMultipart('alternative')
+        message = MIMEMultipart('mixed')
         message['Subject'] = subject
         message['From']    = sender
         message['To']      = to
-        message.attach(MIMEText(body_html, 'html'))
+
+        alternative = MIMEMultipart('alternative')
+        alternative.attach(MIMEText(body_html, 'html'))
+        message.attach(alternative)
+
+        for attachment_path in attachments or []:
+            if not attachment_path or not os.path.isfile(attachment_path):
+                logger.warning('Skipping missing email attachment: %s', attachment_path)
+                continue
+
+            with open(attachment_path, 'rb') as attachment_file:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment_file.read())
+
+            encoders.encode_base64(part)
+            part.add_header(
+                'Content-Disposition',
+                'attachment',
+                filename=os.path.basename(attachment_path),
+            )
+            message.attach(part)
 
         # Connect and send.
         with smtplib.SMTP(server, port) as smtp_conn:

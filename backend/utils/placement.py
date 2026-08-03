@@ -51,3 +51,38 @@ def eligibility_verdict(student, drive):
         'eligible': eligible,
         'reasons': reasons
     }
+
+
+def sync_student_placement_status(student, new_application_status):
+    """
+    Update a student's overall placement_status based on a new application status.
+
+    This helper is called whenever an application's status changes —
+    whether triggered by a company, admin, or result publication.
+
+    Rules:
+    - 'selected'    → student is 'Placed' (highest priority; never downgraded)
+    - 'interview'   → student moves to 'Interview' stage
+    - 'shortlisted' → student moves to 'Applied' (unless already in Interview/Placed)
+    - anything else → no change to student placement_status
+
+    Args:
+        student: The Student model instance whose status should be updated.
+        new_application_status: The new application_status string (e.g. 'selected').
+    """
+    if student is None:
+        return  # Safety guard — no student attached to this application
+
+    status = str(new_application_status or '').lower()
+
+    if status == 'selected':
+        # Placing a student is the highest priority — always update
+        student.placement_status = 'Placed'
+    elif status == 'interview':
+        # Moving to interview stage (allow override even if already 'Applied')
+        student.placement_status = 'Interview'
+    elif status == 'shortlisted':
+        # Only update if not already at a higher stage
+        if student.placement_status not in ('Placed', 'Interview'):
+            student.placement_status = 'Applied'
+    # 'rejected', 'applied', and other statuses do not affect placement_status

@@ -10,6 +10,7 @@ from utils.stats import create_stat_item
 from utils.validators import validate_phone, validate_status_choice, validate_date_format
 from utils.email_templates import EmailTemplateBuilder
 from utils.repository import BaseRepository
+from utils.placement import sync_student_placement_status
 
 class CompanyService:
     """Service layer handling company-specific logic, placement drives and interviews."""
@@ -188,6 +189,42 @@ class CompanyService:
         return [a.to_dict() for a in apps]
 
     @classmethod
+    def get_drive_application_export(cls, user_id, drive_id):
+        from datetime import datetime, timezone
+
+        company = cls.get_company_by_user(user_id)
+        drive = cls.get_owned_drive(company, int(drive_id))
+        apps = db.session.query(Application).filter(
+            Application.drive_id == drive.id
+        ).order_by(Application.applied_at.desc()).all()
+
+        rows = []
+        for app in apps:
+            student = app.student
+            user = student.user if student else None
+            rows.append({
+                'Drive ID': drive.id,
+                'Drive Title': drive.title,
+                'Company Name': company.company_name,
+                'Student ID': student.id if student else '',
+                'Student Name': user.name if user else '',
+                'Student Email': user.email if user else '',
+                'Department': student.department if student else '',
+                'Application Status': app.application_status,
+                'Applied Date': app.applied_at.strftime('%Y-%m-%d %H:%M') if app.applied_at else '',
+            })
+
+        return {
+            'company_id': company.id,
+            'company_name': company.company_name,
+            'drive_id': drive.id,
+            'drive_title': drive.title,
+            'generated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+            'total_applications': len(rows),
+            'rows': rows,
+        }
+
+    @classmethod
     def verify_app_owner(cls, company, app_record):
         if app_record.drive_id not in company.drive_ids:
             raise Forbidden('This application does not belong to your drives')
@@ -225,11 +262,8 @@ class CompanyService:
         company = cls.get_company_by_user(user_id)
         app = cls.get_owned_application(company, app_id)
         app.application_status = 'shortlisted'
-
-        student = app.student
-        if student and student.placement_status not in ('Placed', 'Interview'):
-            student.placement_status = 'Applied'
-
+        # Keep the student's placement_status in sync
+        sync_student_placement_status(app.student, 'shortlisted')
         db.session.commit()
         cls._notify_student_status_update(app, 'shortlisted')
         return app.to_dict()
@@ -250,16 +284,8 @@ class CompanyService:
         company = cls.get_company_by_user(user_id)
         app = cls.get_owned_application(company, app_id)
         app.application_status = clean_status
-
-        if app.student:
-            if clean_status == 'selected':
-                app.student.placement_status = 'Placed'
-            elif clean_status == 'interview':
-                app.student.placement_status = 'Interview'
-            elif clean_status == 'shortlisted':
-                if app.student.placement_status not in ('Placed', 'Interview'):
-                    app.student.placement_status = 'Applied'
-
+        # Keep the student's overall placement_status in sync with the application status
+        sync_student_placement_status(app.student, clean_status)
         db.session.commit()
         cls._notify_student_status_update(app, clean_status)
         return app.to_dict()
@@ -408,9 +434,7 @@ class CompanyService:
             db.session.add(new_res)
 
         app.application_status = status_res
-
-        if status_res == 'selected' and app.student:
-            app.student.placement_status = 'Placed'
-
+        # Mark the student as Placed if they were selected
+        sync_student_placement_status(app.student, status_res)
         db.session.commit()
         cls._notify_student_status_update(app, status_res, extra_info=payload.get('remarks'))

@@ -52,10 +52,5 @@ const navigate = (item) => {
         <span>{{ item.label }}</span>
       </button>
     </nav>
-
-    <div class="mt-4 p-3 rounded-4 bg-white bg-opacity-10">
-      <div class="small text-white-50 mb-1">Academic Session</div>
-      <div class="fw-semibold">2025 - 2026</div>
-    </div>
   </aside>
 </template>

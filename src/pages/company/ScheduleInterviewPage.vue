@@ -5,14 +5,12 @@
         <h3 class="section-heading mb-2">Schedule Interview</h3>
         <p class="text-muted mb-4">Create interview slots exclusively for shortlisted candidates.</p>
 
-        <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
-          <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
-          <button type="button" class="btn-close" @click="error = ''"></button>
-        </div>
-        <div v-if="success" class="alert alert-success alert-dismissible fade show mb-3" role="alert">
-          <i class="bi bi-check-circle me-2"></i>{{ success }}
-          <button type="button" class="btn-close" @click="success = ''"></button>
-        </div>
+        <FeedbackAlert 
+          :success="successMsg"
+          :error="errorMsg"
+          @clear-success="clearMessages"
+          @clear-error="clearMessages"
+        />
 
         <div v-if="!fetchingApps && !fetchError && shortlisted.length === 0" class="alert alert-warning mb-3">
           <i class="bi bi-info-circle me-2"></i>
@@ -100,29 +98,30 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { companyAPI } from '@/api/company'
+import FeedbackAlert from '@/components/common/FeedbackAlert.vue'
+import { usePageFeedback } from '@/composables/usePageFeedback'
+
+const { successMsg, errorMsg, showSuccess, showError, clearMessages } = usePageFeedback()
 
 const shortlisted = ref([])
 const interviews = ref([])
 const loading = ref(false)
 const fetchingApps = ref(true)
 const fetchError = ref(false)
-const error = ref('')
-const success = ref('')
 const sendingEmailId = ref(null)
 const form = ref({ application_id: '', round_name: '', interview_date: '', interview_time: '', interview_mode: 'online', interview_link: '' })
 
 async function handleSchedule() {
   loading.value = true
-  error.value = ''
-  success.value = ''
+  clearMessages()
   try {
-    await companyAPI.scheduleInterview(form.value)
-    success.value = 'Interview scheduled successfully. Applicant notified.'
+    const res = await companyAPI.scheduleInterview(form.value)
+    showSuccess(`Interview scheduled for ${res.data.interview.student_name}. Notifications sent.`)
     form.value = { application_id: '', round_name: '', interview_date: '', interview_time: '', interview_mode: 'online', interview_link: '' }
     await fetchShortlisted()
     await fetchInterviews()
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to schedule interview.'
+    showError(err.response?.data?.error || 'Failed to schedule interview.')
   } finally {
     loading.value = false
   }

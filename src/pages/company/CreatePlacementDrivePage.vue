@@ -16,7 +16,7 @@
           </template>
           <template #status="{ row }">
             <span class="badge rounded-pill"
-              :class="row.status === 'open' || row.status === 'approved' ? 'badge-soft-success' : row.status === 'pending' ? 'badge-soft-warning' : 'badge-soft-danger'">
+              :class="driveBadge(row.status)">
               {{ row.status }}
             </span>
           </template>
@@ -25,6 +25,9 @@
               <router-link :to="`/company/drives/${row.id}/edit`" class="btn btn-outline-primary">
                 <i class="bi bi-pencil me-1"></i>Edit
               </router-link>
+              <button class="btn btn-outline-secondary" @click="handleClose(row)" :disabled="row.status === 'closed'">
+                <i class="bi bi-x-circle me-1"></i>Close
+              </button>
               <button class="btn btn-outline-danger" @click="handleDelete(row.id)" :disabled="deletingId === row.id">
                 <span v-if="deletingId === row.id" class="spinner-border spinner-border-sm me-1"></span>
                 <i v-else class="bi bi-trash me-1"></i>Delete
@@ -86,6 +89,7 @@ import { useRouter } from 'vue-router'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import { companyAPI } from '@/api/company'
+import { driveBadge } from '@/utils/statusMeta'
 
 const router = useRouter()
 
@@ -142,6 +146,16 @@ async function handleDelete(id) {
     alert(err.response?.data?.error || 'Failed to delete drive.')
   } finally {
     deletingId.value = null
+  }
+}
+
+async function handleClose(drive) {
+  if (!confirm('Close this placement drive? New applications will be disabled.')) return
+  try {
+    const { data } = await companyAPI.closeDrive(drive.id)
+    drive.status = data.drive?.status || 'closed'
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to close drive.')
   }
 }
 

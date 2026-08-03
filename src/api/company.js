@@ -1,3 +1,4 @@
+import httpClient from './axios'
 import { get, post, put, del, buildPath } from './http'
 
 // company API calls
@@ -49,6 +50,17 @@ export const companyAPI = {
   },
   updateApplicationStatus: function (appId, newStatus) {
     return put(buildPath('/api/company/applications', appId, '/status'), { status: newStatus })
+  },
+  exportApplicationsCsv: function (driveId) {
+    return post('/api/company/applications/export', { drive_id: driveId })
+  },
+  getApplicationsExportStatus: function (taskId) {
+    return get('/api/company/applications/export/status/' + taskId)
+  },
+  downloadApplicationsExport: function (filename) {
+    return httpClient.get('/api/company/applications/export/download/' + filename, {
+      responseType: 'blob'
+    })
   },
 
   // interviews

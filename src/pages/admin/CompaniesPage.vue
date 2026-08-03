@@ -2,11 +2,16 @@
 import { ref, onMounted } from 'vue'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import FeedbackAlert from '@/components/common/FeedbackAlert.vue'
 import { adminAPI } from '@/api/admin'
+import { usePageFeedback } from '@/composables/usePageFeedback'
 
 const companies = ref([])
 const loading = ref(false)
-const actionMsg = ref('')
+const { successMsg, errorMsg, showSuccess, clearMessages } = usePageFeedback()
 const query = ref('')
 
 const headers = ['Company', 'Industry', 'City', 'Contact', 'Drives', 'Status', 'Actions']
@@ -30,8 +35,7 @@ async function approveCompany(company) {
   try {
     await adminAPI.approveCompany(company.id)
     company.approval_status = 'approved'
-    actionMsg.value = `${company.company_name} approved.`
-    setTimeout(() => { actionMsg.value = '' }, 3000)
+    showSuccess(`${company.company_name} approved.`)
   } catch (err) { console.error(err) }
 }
 
@@ -40,8 +44,7 @@ async function blacklistCompany(company) {
   try {
     await adminAPI.blacklistCompany(company.id, bl)
     company.blacklisted = bl
-    actionMsg.value = bl ? `${company.company_name} blacklisted.` : `${company.company_name} removed from blacklist.`
-    setTimeout(() => { actionMsg.value = '' }, 3000)
+    showSuccess(bl ? `${company.company_name} blacklisted.` : `${company.company_name} removed from blacklist.`)
   } catch (err) { console.error(err) }
 }
 
@@ -55,7 +58,12 @@ onMounted(fetchCompanies)
 
 <template>
   <SectionCard title="Company Management" subtitle="Registration approvals, status tracking, and blacklist controls">
-    <div v-if="actionMsg" class="alert alert-success mb-3">{{ actionMsg }}</div>
+    <FeedbackAlert 
+      :success="successMsg"
+      :error="errorMsg"
+      @clear-success="clearMessages"
+      @clear-error="clearMessages"
+    />
     <div class="row g-3 mb-4">
       <div class="col-12 col-lg-8">
         <input v-model="query" type="search" class="form-control" placeholder="Search by company name, industry, or city" />
@@ -66,13 +74,16 @@ onMounted(fetchCompanies)
         </button>
       </div>
     </div>
-    <div v-if="loading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+    
+    <LoadingSpinner v-if="loading" />
+    <EmptyState 
+      v-else-if="companies.length === 0" 
+      title="No companies found." 
+      icon="bi-building"
+    />
     <DataTable v-else :headers="headers" :columns="columns" :rows="companies">
       <template #approval_status="{ row }">
-        <span class="badge rounded-pill"
-          :class="row.blacklisted ? 'badge-soft-danger' : row.approval_status === 'approved' ? 'badge-soft-success' : row.approval_status === 'pending' ? 'badge-soft-warning' : 'badge-soft-danger'">
-          {{ statusLabel(row) }}
-        </span>
+        <StatusBadge variant="company" :row="row" :label="statusLabel(row)" />
       </template>
       <template #actions="{ row }">
         <div class="btn-group btn-group-sm">

@@ -3,12 +3,15 @@ from models.student import Student
 from models.company import Company
 from models.placement_drive import PlacementDrive
 from models.application import Application
+from models.result import Result
 from models.user import User
 from exceptions import NotFound, ValidationError
-from utils.pagination import paginate_query
 from utils.stats import create_stat_item
 from utils.repository import BaseRepository
 from utils.validators import validate_status_choice
+from utils.query_filters import apply_ilike_search, cleaned_text, paginate_named_items
+from utils.student_updater import apply_student_profile_fields
+from utils.placement import sync_student_placement_status
 
 class PortalSettings:
     """Manages system settings for the placement portal."""
@@ -95,21 +98,16 @@ class AdminService:
     def get_students(search_term='', status_filter='', page_num=1, records_per_page=20):
         query = db.session.query(Student).join(User)
 
-        clean_search = str(search_term or '').strip()
-        if clean_search:
-            wildcard = f"%{clean_search}%"
-            query = query.filter(
-                db.or_(
-                    User.name.ilike(wildcard),
-                    User.email.ilike(wildcard),
-                    Student.register_number.ilike(wildcard),
-                    Student.department.ilike(wildcard),
-                    Student.phone.ilike(wildcard),
-                    Student.preferred_role.ilike(wildcard)
-                )
-            )
+        query = apply_ilike_search(query, search_term, [
+            User.name,
+            User.email,
+            Student.register_number,
+            Student.department,
+            Student.phone,
+            Student.preferred_role,
+        ])
 
-        clean_status = str(status_filter or '').strip().lower()
+        clean_status = cleaned_text(status_filter, lower=True)
         if clean_status and clean_status != 'all':
             if clean_status == 'inactive':
                 query = query.filter(User.status == 'inactive')
@@ -118,9 +116,7 @@ class AdminService:
             else:
                 query = query.filter(Student.placement_status.ilike(clean_status))
 
-        paginated = paginate_query(query, page_num, records_per_page)
-        paginated['students'] = [s.to_dict() for s in paginated.pop('items')]
-        return paginated
+        return paginate_named_items(query, page_num, records_per_page, 'students')
 
     @staticmethod
     def get_student_detail(student_id):
@@ -140,23 +136,10 @@ class AdminService:
 
     @staticmethod
     def update_student(student_id, payload):
+        """Update admin-editable fields on a student record."""
         student = BaseRepository.get_by_id_or_404(Student, student_id, 'Student not found')
-
-        if 'name' in payload:
-            student.user.name = payload['name']
-        if 'email' in payload:
-            student.user.email = payload['email'].lower().strip()
-
-        updatable_fields = ['department', 'year', 'cgpa', 'phone', 'address',
-                            'marks_10th', 'marks_12th', 'backlogs', 'graduation_year', 'preferred_role']
-                            
-        for field in updatable_fields:
-            if field in payload:
-                setattr(student, field, payload[field])
-
-        if 'skills' in payload:
-            student.save_skills(payload['skills'])
-
+        # Delegate to the shared field-update helper so the field list stays in one place
+        apply_student_profile_fields(student, payload)
         db.session.commit()
         return student.to_dict()
 
@@ -172,23 +155,18 @@ class AdminService:
     def get_companies(search_term='', status_filter='', page_num=1, records_per_page=20):
         query = db.session.query(Company).join(User)
 
-        clean_search = str(search_term or '').strip()
-        if clean_search:
-            wildcard = f"%{clean_search}%"
-            query = query.filter(
-                db.or_(
-                    Company.company_name.ilike(wildcard),
-                    User.name.ilike(wildcard),
-                    User.email.ilike(wildcard),
-                    Company.contact_email.ilike(wildcard),
-                    Company.contact_person.ilike(wildcard),
-                    Company.contact_phone.ilike(wildcard),
-                    Company.industry.ilike(wildcard),
-                    Company.city.ilike(wildcard)
-                )
-            )
+        query = apply_ilike_search(query, search_term, [
+            Company.company_name,
+            User.name,
+            User.email,
+            Company.contact_email,
+            Company.contact_person,
+            Company.contact_phone,
+            Company.industry,
+            Company.city,
+        ])
 
-        clean_status = str(status_filter or '').strip().lower()
+        clean_status = cleaned_text(status_filter, lower=True)
         if clean_status and clean_status != 'all':
             if clean_status == 'blacklisted':
                 query = query.filter(Company.blacklisted == True)
@@ -198,9 +176,7 @@ class AdminService:
                     Company.blacklisted == False
                 )
 
-        paginated = paginate_query(query, page_num, records_per_page)
-        paginated['companies'] = [c.to_dict() for c in paginated.pop('items')]
-        return paginated
+        return paginate_named_items(query, page_num, records_per_page, 'companies')
 
     @staticmethod
     def get_company_detail(company_id):
@@ -225,24 +201,17 @@ class AdminService:
     def get_drives(search_term='', status_filter='', page_num=1, records_per_page=20):
         query = db.session.query(PlacementDrive).join(Company)
 
-        clean_search = str(search_term or '').strip()
-        if clean_search:
-            wildcard = f"%{clean_search}%"
-            query = query.filter(
-                db.or_(
-                    PlacementDrive.title.ilike(wildcard),
-                    PlacementDrive.job_role.ilike(wildcard),
-                    Company.company_name.ilike(wildcard)
-                )
-            )
+        query = apply_ilike_search(query, search_term, [
+            PlacementDrive.title,
+            PlacementDrive.job_role,
+            Company.company_name,
+        ])
 
-        clean_status = str(status_filter or '').strip().lower()
+        clean_status = cleaned_text(status_filter, lower=True)
         if clean_status and clean_status != 'all':
             query = query.filter(PlacementDrive.status == clean_status)
 
-        paginated = paginate_query(query, page_num, records_per_page)
-        paginated['drives'] = [d.to_dict() for d in paginated.pop('items')]
-        return paginated
+        return paginate_named_items(query, page_num, records_per_page, 'drives')
 
     @staticmethod
     def get_drive_detail(drive_id):
@@ -278,9 +247,7 @@ class AdminService:
 
         query = query.order_by(Application.applied_at.desc())
 
-        paginated = paginate_query(query, page_num, records_per_page)
-        paginated['applications'] = [a.to_dict() for a in paginated.pop('items')]
-        return paginated
+        return paginate_named_items(query, page_num, records_per_page, 'applications')
 
     @staticmethod
     def update_application_status(application_id, status_val):
@@ -289,15 +256,8 @@ class AdminService:
         app = BaseRepository.get_by_id_or_404(Application, application_id, 'Application not found')
 
         app.application_status = clean_status
-
-        if app.student:
-            if clean_status == 'selected':
-                app.student.placement_status = 'Placed'
-            elif clean_status == 'interview':
-                app.student.placement_status = 'Interview'
-            elif clean_status == 'shortlisted':
-                if app.student.placement_status not in ('Placed', 'Interview'):
-                    app.student.placement_status = 'Applied'
+        # Sync the student's overall placement stage using the shared helper
+        sync_student_placement_status(app.student, clean_status)
 
         db.session.commit()
         return app.to_dict()
@@ -402,6 +362,77 @@ class AdminService:
                 'interview_rate': interview_rate,
             },
             'department_breakdown': dept_breakdown,
+        }
+
+    @staticmethod
+    def get_monthly_activity_report(year, month):
+        """
+        Return monthly placement activity metrics for one calendar month.
+
+        Drive activity uses PlacementDrive.created_at. Student application
+        activity uses Application.applied_at. Selection activity uses
+        Result.published_at when a result row exists, which is the only
+        persisted timestamp for final selection publication.
+        """
+        from calendar import month_name
+        from datetime import datetime, timezone
+        from sqlalchemy import func
+
+        report_year = int(year)
+        report_month = int(month)
+        if report_month < 1 or report_month > 12:
+            raise ValidationError('Month must be between 1 and 12')
+
+        start_at = datetime(report_year, report_month, 1, tzinfo=timezone.utc)
+        if report_month == 12:
+            end_at = datetime(report_year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            end_at = datetime(report_year, report_month + 1, 1, tzinfo=timezone.utc)
+
+        drives_conducted = (
+            db.session.query(func.count(PlacementDrive.id))
+            .filter(
+                PlacementDrive.created_at >= start_at,
+                PlacementDrive.created_at < end_at,
+                PlacementDrive.status.in_(['approved', 'open', 'closed']),
+            )
+            .scalar()
+            or 0
+        )
+
+        students_applied = (
+            db.session.query(func.count(func.distinct(Application.student_id)))
+            .filter(
+                Application.applied_at >= start_at,
+                Application.applied_at < end_at,
+            )
+            .scalar()
+            or 0
+        )
+
+        students_selected = (
+            db.session.query(func.count(func.distinct(Application.student_id)))
+            .join(Result, Result.application_id == Application.id)
+            .filter(
+                Result.result_status == 'selected',
+                Result.published_at >= start_at,
+                Result.published_at < end_at,
+            )
+            .scalar()
+            or 0
+        )
+
+        return {
+            'month': report_month,
+            'month_name': month_name[report_month],
+            'year': report_year,
+            'period': f'{month_name[report_month]} {report_year}',
+            'period_key': f'{report_year}-{report_month:02d}',
+            'metrics': {
+                'placement_drives_conducted': drives_conducted,
+                'students_applied': students_applied,
+                'students_selected': students_selected,
+            },
         }
 
     @staticmethod

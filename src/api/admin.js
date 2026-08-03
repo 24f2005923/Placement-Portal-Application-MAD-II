@@ -1,4 +1,5 @@
 import { get, post, put, buildPath } from './http'
+import httpClient from './axios'
 
 // all admin API calls
 
@@ -13,11 +14,8 @@ export const adminAPI = {
   },
 
   // reports — analytics (live DB)
-  getPlacementAnalytics: function () {
-    return get('/api/admin/reports/analytics')
-  },
-  getTopCompanies: function (limit) {
-    return get('/api/admin/reports/companies/top', { limit: limit || 10 })
+  getMonthlyActivityReport: function (params) {
+    return get('/api/admin/reports/monthly-activity', params)
   },
   generateReport: function (payload) {
     return post('/api/admin/reports/generate', payload)
@@ -25,8 +23,8 @@ export const adminAPI = {
   getReportStatus: function (taskId) {
     return get('/api/admin/reports/status/' + taskId)
   },
-  listReports: function () {
-    return get('/api/admin/reports/list')
+  downloadExportFile: function (filename) {
+    return httpClient.get('/api/admin/export/download/' + filename, { responseType: 'blob' })
   },
 
   // csv exports

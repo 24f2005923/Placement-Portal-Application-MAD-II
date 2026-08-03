@@ -6,7 +6,7 @@
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
           <div>
             <h3 class="section-heading mb-1">Application Management</h3>
-            <p class="text-muted mb-0">Monitor, filter, and manage all student placement applications across drives.</p>
+            <p class="text-muted mb-0">Monitor and manage all student placement applications across drives.</p>
           </div>
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <span class="badge badge-soft-primary px-3 py-2">Total: {{ pagination.total || 0 }}</span>
@@ -14,31 +14,17 @@
         </div>
 
         <!-- Feedback Alerts -->
-        <div v-if="msg" class="alert alert-success alert-dismissible fade show" role="alert">
-          <i class="bi bi-check-circle me-2"></i>{{ msg }}
-          <button type="button" class="btn-close" @click="msg = ''"></button>
-        </div>
-        <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
-          <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
-          <button type="button" class="btn-close" @click="error = ''"></button>
-        </div>
+        <FeedbackAlert
+          :success="successMsg"
+          :error="errorMsg"
+          @clear-success="clearMessages"
+          @clear-error="clearMessages"
+        />
 
-        <!-- Filters & Search Bar -->
+        <!-- Status Filter -->
         <div class="row g-3 mb-4 align-items-center">
-          <div class="col-12 col-md-6 col-lg-5">
-            <div class="input-group">
-              <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
-              <input
-                v-model="search"
-                type="search"
-                class="form-control"
-                placeholder="Search by student name, roll #, company, or role..."
-                @input="debouncedSearch"
-              />
-            </div>
-          </div>
           <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-            <select v-model="statusFilter" class="form-select" @change="fetchApplications">
+            <select v-model="statusFilter" class="form-select" @change="fetchApplications(1)">
               <option value="">All Statuses</option>
               <option value="applied">Applied (Screening)</option>
               <option value="shortlisted">Shortlisted</option>
@@ -47,21 +33,14 @@
               <option value="rejected">Rejected</option>
             </select>
           </div>
-          <div class="col-12 col-sm-6 col-md-2">
-            <button class="btn btn-outline-secondary w-100" @click="resetFilters">
-              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
-            </button>
-          </div>
         </div>
 
         <!-- Applications Data Table -->
-        <div v-if="loading" class="text-center py-5">
-          <div class="spinner-border text-primary"></div>
-        </div>
-        <div v-else-if="applications.length === 0" class="text-center py-5 text-muted">
-          <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
-          No applications match the current filter or search criteria.
-        </div>
+        <LoadingSpinner v-if="loading" />
+        <EmptyState 
+          v-else-if="applications.length === 0" 
+          title="No applications match the current status filter." 
+        />
         <div v-else class="table-responsive">
           <table class="table align-middle table-hover border">
             <thead class="table-light">
@@ -103,9 +82,7 @@
                   <span v-else class="text-muted small">Not Uploaded</span>
                 </td>
                 <td>
-                  <span class="badge rounded-pill px-3 py-2" :class="getStatusBadgeClass(app.application_status)">
-                    {{ app.stage || app.application_status }}
-                  </span>
+                  <StatusBadge variant="admin_application" :status="app.application_status" :label="app.stage || app.application_status" />
                 </td>
               </tr>
             </tbody>
@@ -138,15 +115,18 @@
 import { ref, onMounted } from 'vue'
 import { adminAPI } from '@/api/admin'
 import httpClient from '@/api/axios'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import FeedbackAlert from '@/components/common/FeedbackAlert.vue'
+import { usePageFeedback } from '@/composables/usePageFeedback'
 
 const applications = ref([])
 const loading = ref(true)
-const search = ref('')
 const statusFilter = ref('')
-const msg = ref('')
-const error = ref('')
 const openingResume = ref(null)
-let searchTimeout = null
+
+const { successMsg, errorMsg, showError, clearMessages } = usePageFeedback()
 
 const pagination = ref({
   current_page: 1,
@@ -156,28 +136,11 @@ const pagination = ref({
   has_prev: false
 })
 
-function getStatusBadgeClass(status) {
-  switch (status) {
-    case 'selected':
-      return 'badge-soft-success'
-    case 'shortlisted':
-      return 'badge-soft-info'
-    case 'interview':
-      return 'badge-soft-warning'
-    case 'rejected':
-      return 'badge-soft-danger'
-    default:
-      return 'badge-soft-secondary'
-  }
-}
-
 async function fetchApplications(page = 1) {
   loading.value = true
-  msg.value = ''
-  error.value = ''
+  clearMessages()
   try {
     const { data } = await adminAPI.getApplications({
-      search: search.value,
       status: statusFilter.value,
       page: page,
       per_page: 15
@@ -191,23 +154,10 @@ async function fetchApplications(page = 1) {
       has_prev: data.has_prev || false
     }
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to load applications.'
+    showError(err.response?.data?.error || 'Failed to load applications.')
   } finally {
     loading.value = false
   }
-}
-
-function debouncedSearch() {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    fetchApplications(1)
-  }, 350)
-}
-
-function resetFilters() {
-  search.value = ''
-  statusFilter.value = ''
-  fetchApplications(1)
 }
 
 async function openAdminResume(resumePath) {
@@ -220,7 +170,7 @@ async function openAdminResume(resumePath) {
     const blobUrl = URL.createObjectURL(response.data)
     window.open(blobUrl, '_blank')
   } catch (err) {
-    error.value = 'Could not open resume. The file may no longer exist.'
+    showError('Could not open resume. The file may no longer exist.')
   } finally {
     openingResume.value = null
   }

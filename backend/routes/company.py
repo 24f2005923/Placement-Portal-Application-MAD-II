@@ -1,11 +1,14 @@
-from flask import Blueprint
+import os
+
+from flask import Blueprint, current_app, send_from_directory
 from flask_jwt_extended import get_jwt_identity
 from middleware.auth_middleware import company_required
 from services.company_service import CompanyService
 from cache.decorators import cache_response
 from utils.cache_manager import CacheManager
 from utils.request_helpers import json_payload, query_text
-from utils.responses import success_response, created_response
+from utils.responses import success_response, created_response, error_response
+from utils.task_runner import async_result_response, dispatch_task, task_dispatch_response
 
 company_bp = Blueprint('company_routes', __name__, url_prefix='/api/company')
 
@@ -106,6 +109,66 @@ def get_received_applications():
     apps = CompanyService.get_received_applications(uid, status_filter, drive_filter)
     return success_response({'applications': apps})
 
+@company_bp.route('/applications/export', methods=['POST'])
+@company_required
+def export_drive_applications():
+    from tasks.csv_exports import export_company_drive_applications_csv
+
+    uid = get_jwt_identity()
+    payload = json_payload()
+    drive_id = payload.get('drive_id')
+    if not drive_id:
+        return error_response('drive_id is required', 400)
+
+    company = CompanyService.get_company_by_user(uid)
+    CompanyService.get_owned_drive(company, int(drive_id))
+    notify_email = company.user.email if company.user else company.contact_email
+
+    dispatched = dispatch_task(
+        export_company_drive_applications_csv,
+        user_id=int(uid),
+        drive_id=int(drive_id),
+        requested_by_email=notify_email,
+    )
+
+    return task_dispatch_response(
+        dispatched,
+        queued_message='Drive applications CSV export has been queued.',
+        completed_message='Drive applications CSV export completed successfully.',
+        status_url_prefix='/api/company/applications/export/status',
+        download_url_builder=_company_application_export_download_url,
+    )
+
+@company_bp.route('/applications/export/status/<task_id>', methods=['GET'])
+@company_required
+def get_application_export_status(task_id):
+    from celery_app import celery
+
+    task_result = celery.AsyncResult(task_id)
+    return async_result_response(
+        task_id,
+        task_result,
+        download_url_builder=_company_application_export_download_url,
+        pending_message='Drive applications CSV export is queued / processing...',
+    )
+
+@company_bp.route('/applications/export/download/<filename>', methods=['GET'])
+@company_required
+def download_application_export(filename):
+    uid = get_jwt_identity()
+    company = CompanyService.get_company_by_user(uid)
+
+    expected_prefix = f'company_drive_applications_{company.id}_'
+    if not filename.endswith('.csv') or not filename.startswith(expected_prefix):
+        return error_response('Export file not found', 404)
+
+    exports_dir = current_app.config['EXPORTS_FOLDER']
+    file_path = os.path.join(exports_dir, filename)
+    if not os.path.isfile(file_path):
+        return error_response('Export file not found', 404)
+
+    return send_from_directory(exports_dir, filename, as_attachment=True)
+
 @company_bp.route('/applications/<int:app_id>/shortlist', methods=['PUT'])
 @company_required
 def shortlist_student(app_id):
@@ -183,3 +246,7 @@ def publish_result():
     CacheManager.invalidate_application_student(payload.get('application_id'))
         
     return success_response(message=f"Result published: {payload.get('result_status')}")
+
+def _company_application_export_download_url(result):
+    filename = (result or {}).get('filename')
+    return f'/api/company/applications/export/download/{filename}' if filename else None

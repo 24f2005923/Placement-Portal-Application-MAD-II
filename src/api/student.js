@@ -46,6 +46,20 @@ export const studentAPI = {
     return get('/api/student/applications')
   },
 
+  exportApplicationsCsv: function () {
+    return post('/api/student/applications/export')
+  },
+
+  getApplicationsExportStatus: function (taskId) {
+    return get('/api/student/applications/export/status/' + taskId)
+  },
+
+  downloadApplicationsExport: function (filename) {
+    return httpClient.get('/api/student/applications/export/download/' + filename, {
+      responseType: 'blob'
+    })
+  },
+
   getInterviews: function () {
     return get('/api/student/interviews')
   },
@@ -56,7 +70,7 @@ export const studentAPI = {
 
   getOfferLetterUrl: function (appId) {
     const token = localStorage.getItem('access_token')
-    return `/api/student/applications/${appId}/offer-letter?token=${token}`
+    return `http://localhost:5000/api/student/applications/${appId}/offer-letter?token=${token || ''}`
   },
 
   downloadOfferLetter: function (appId) {

@@ -151,3 +151,74 @@ class EmailTemplateBuilder:
         clean_company = "".join(c for c in company_name if c.isalnum() or c == '_')
         clean_student = "".join(c for c in student_name if c.isalnum() or c == '_')
         return html_doc, f"Offer_Letter_{clean_company}_{clean_student}.html"
+
+    @staticmethod
+    def build_drive_deadline_reminder(student_name, company_name, job_role, package, deadline_str):
+        """
+        Build an HTML email body for a placement drive deadline reminder.
+
+        Sent by the daily Celery task when a drive's deadline is within 48 hours
+        and the student has not yet applied.
+
+        Args:
+            student_name:  Recipient student's full name.
+            company_name:  Name of the company running the placement drive.
+            job_role:      Job role advertised by the drive.
+            package:       Salary/package string (or 'Not disclosed').
+            deadline_str:  Human-readable deadline date string (e.g. '25 July 2025').
+        """
+        body = f"""
+        <p>Dear <strong>{student_name}</strong>,</p>
+        <p>This is a quick reminder that the application deadline for an active placement drive
+           is fast approaching. You have not submitted an application yet.</p>
+        <div class="details-box">
+          <p style="margin: 5px 0;"><strong>Company:</strong> {company_name}</p>
+          <p style="margin: 5px 0;"><strong>Role:</strong> {job_role}</p>
+          <p style="margin: 5px 0;"><strong>Package:</strong> {package}</p>
+          <p style="margin: 5px 0;"><strong>Deadline:</strong> <span style="color: #dc2626; font-weight: bold;">{deadline_str}</span></p>
+        </div>
+        <p>If you wish to be considered for this opportunity, please log in to your student
+           dashboard and submit your application before the deadline.</p>
+        <p><strong>Best of luck!</strong></p>
+        """
+        return EmailTemplateBuilder.get_base_template("⏳ Placement Drive Deadline Approaching", body)
+
+    @staticmethod
+    def build_interview_reminder_from_info(student_name, info):
+        """
+        Build an HTML interview reminder email from a pre-built info dictionary.
+
+        Used by the daily interview-reminder Celery task.  The `info` dict is
+        produced by _build_interview_info() in interview_reminders.py and contains
+        keys: company, role, interview_date, interview_time, mode, link, round_name, remarks.
+
+        Args:
+            student_name: Recipient student's full name.
+            info:         Dict of interview details (see _build_interview_info).
+        """
+        # Build the optional meeting-link section for online interviews
+        link_section = ''
+        if info.get('mode') == 'online' and info.get('link'):
+            link_section = f'<p style="margin: 5px 0;"><strong>Meeting Link:</strong> <a href="{info["link"]}">{info["link"]}</a></p>'
+
+        remarks_section = ''
+        if info.get('remarks'):
+            remarks_section = f'<p style="margin: 5px 0;"><strong>Remarks:</strong> {info["remarks"]}</p>'
+
+        body = f"""
+        <p>Dear <strong>{student_name}</strong>,</p>
+        <p>This is a friendly reminder that you have an upcoming interview scheduled.</p>
+        <div class="details-box">
+          <p style="margin: 5px 0;"><strong>Company:</strong> {info.get('company', '')}</p>
+          <p style="margin: 5px 0;"><strong>Role:</strong> {info.get('role', '')}</p>
+          <p style="margin: 5px 0;"><strong>Round:</strong> {info.get('round_name', 'Interview')}</p>
+          <p style="margin: 5px 0;"><strong>Date:</strong> {info.get('interview_date', 'TBD')}</p>
+          <p style="margin: 5px 0;"><strong>Time:</strong> {info.get('interview_time', 'TBD')}</p>
+          <p style="margin: 5px 0;"><strong>Mode:</strong> {info.get('mode', 'online').title()}</p>
+          {link_section}
+          {remarks_section}
+        </div>
+        <p>Please be on time and ensure your internet connection is stable for online interviews.</p>
+        <p><strong>Best of luck!</strong></p>
+        """
+        return EmailTemplateBuilder.get_base_template("🗓️ Interview Reminder", body)

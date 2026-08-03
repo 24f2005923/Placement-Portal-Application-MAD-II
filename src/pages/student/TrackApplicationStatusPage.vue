@@ -11,6 +11,14 @@
       </router-link>
     </div>
 
+    <!-- Feedback Alerts -->
+    <FeedbackAlert 
+      :success="successMsg"
+      :error="errorMsg"
+      @clear-success="clearMessages"
+      @clear-error="clearMessages"
+    />
+
     <!-- Summary Quick Stats -->
     <div class="row g-3 mb-4" v-if="!loading && applications.length > 0">
       <div class="col-6 col-md-3">
@@ -69,22 +77,17 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status"></div>
-      <div class="text-muted small mt-2">Loading application history...</div>
-    </div>
+    <LoadingSpinner v-if="loading" message="Loading application history..." />
 
     <!-- Empty State -->
-    <div v-else-if="filteredApplications.length === 0" class="text-center py-5 border rounded-4 bg-light">
-      <i class="bi bi-journal-x fs-1 d-block mb-2 text-secondary"></i>
-      <h5 class="fw-semibold text-muted">No Applications Found</h5>
-      <p class="text-muted small mb-3">
-        {{ searchQuery || selectedStatus !== 'all' ? 'No applications match your filter criteria.' : 'You have not submitted any placement drive applications yet.' }}
-      </p>
-      <router-link to="/student/drives" class="btn btn-sm btn-outline-primary rounded-pill px-3">
-        Explore Placement Drives
-      </router-link>
-    </div>
+    <EmptyState 
+      v-else-if="filteredApplications.length === 0" 
+      title="No Applications Found"
+      :message="searchQuery || selectedStatus !== 'all' ? 'No applications match your filter criteria.' : 'You have not submitted any placement drive applications yet.'"
+      icon="bi-journal-x"
+      actionLabel="Explore Placement Drives"
+      actionTo="/student/drives"
+    />
 
     <!-- Application History Table -->
     <div v-else class="table-responsive">
@@ -117,12 +120,7 @@
             <!-- Status & Stage -->
             <td>
               <div class="mb-1">
-                <span
-                  class="badge rounded-pill px-3 py-2 text-capitalize fs-7"
-                  :class="app.application_status === 'selected' ? 'badge-soft-success' : app.application_status === 'rejected' ? 'badge-soft-danger' : app.application_status === 'interview' ? 'badge-soft-info' : app.application_status === 'shortlisted' ? 'badge-soft-warning' : 'badge-soft-secondary'"
-                >
-                  {{ app.application_status }}
-                </span>
+                <StatusBadge variant="application" :status="app.application_status" class="fs-7" />
               </div>
               <small class="text-muted d-block">Stage: <strong>{{ app.stage }}</strong></small>
               <div class="progress mt-2" style="height: 6px; width: 110px;">
@@ -203,11 +201,25 @@
 import { ref, computed, onMounted } from 'vue'
 import { studentAPI } from '@/api/student'
 import { openResume } from '@/utils/resume'
+import { useAsyncCsvExport } from '@/composables/useAsyncCsvExport'
+import { usePageFeedback } from '@/composables/usePageFeedback'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import FeedbackAlert from '@/components/common/FeedbackAlert.vue'
 
 const applications = ref([])
 const loading = ref(true)
 const searchQuery = ref('')
 const selectedStatus = ref('all')
+
+const { successMsg, errorMsg, showSuccess, showError, clearMessages } = usePageFeedback()
+
+const {
+  busy: exporting,
+  statusText: exportStatus,
+  run: runApplicationExport
+} = useAsyncCsvExport({ idleText: 'Exporting...' })
 
 const statusOptions = [
   { label: 'All', value: 'all' },
@@ -243,6 +255,20 @@ const filteredApplications = computed(() => {
     return true
   })
 })
+
+async function handleExportApplications() {
+  clearMessages()
+  try {
+    await runApplicationExport({
+      start: () => studentAPI.exportApplicationsCsv(),
+      status: taskId => studentAPI.getApplicationsExportStatus(taskId),
+      download: filename => studentAPI.downloadApplicationsExport(filename),
+      success: () => showSuccess('Application CSV exported successfully.')
+    })
+  } catch (err) {
+    showError(err?.response?.data?.error || err.message || 'Application CSV export failed.')
+  }
+}
 
 onMounted(async () => {
   try {
