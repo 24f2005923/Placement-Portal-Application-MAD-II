@@ -147,8 +147,8 @@ def send_interview_reminders(self):
             # where two workers dispatch simultaneously for the same record.
             try:
                 history_entry = InterviewReminderHistory(
-                    student_id=student.id,
-                    interview_id=interview.id,
+                    student_id =student.id,
+                    interview_id =interview.id,
                 )
                 db.session.add(history_entry)
                 db.session.commit()
