@@ -17,6 +17,7 @@ from flask import Blueprint, jsonify, send_from_directory, request
 from flask_jwt_extended import get_jwt
 
 from middleware.auth_middleware import admin_required
+from utils.task_runner import dispatch_task
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +49,24 @@ def trigger_student_export():
     notify_email  = payload.get('notify_email') or jwt_claims.get('email', '')
 
     # Dispatch the Celery task asynchronously (returns immediately)
-    task = export_students_csv.delay(requested_by_email=notify_email)
+    dispatched = dispatch_task(export_students_csv, requested_by_email=notify_email)
+    result = dispatched['result'] or {}
+    filename = result.get('filename')
 
-    logger.info('Student CSV export queued: task_id=%s, notify=%s', task.id, notify_email)
+    logger.info('Student CSV export dispatched: task_id=%s, notify=%s', dispatched['task_id'], notify_email)
 
     return jsonify({
-        'message':    'Student export job has been queued. You will be notified when it completes.',
-        'task_id':    task.id,
-        'status_url': f'/api/admin/export/status/{task.id}',
-    }), 202
+        'message': (
+            'Student export job has been queued. You will be notified when it completes.'
+            if dispatched['queued']
+            else 'Student export completed successfully.'
+        ),
+        'task_id': dispatched['task_id'],
+        'status_url': f"/api/admin/export/status/{dispatched['task_id']}",
+        'state': 'PENDING' if dispatched['queued'] else 'SUCCESS',
+        'result': result,
+        'download_url': f'/api/admin/export/download/{filename}' if filename else None,
+    }), 202 if dispatched['queued'] else 200
 
 
 @export_bp.route('/companies', methods=['POST'])
@@ -79,15 +89,24 @@ def trigger_company_export():
     payload      = request.get_json(silent=True) or {}
     notify_email = payload.get('notify_email') or jwt_claims.get('email', '')
 
-    task = export_companies_csv.delay(requested_by_email=notify_email)
+    dispatched = dispatch_task(export_companies_csv, requested_by_email=notify_email)
+    result = dispatched['result'] or {}
+    filename = result.get('filename')
 
-    logger.info('Company CSV export queued: task_id=%s, notify=%s', task.id, notify_email)
+    logger.info('Company CSV export dispatched: task_id=%s, notify=%s', dispatched['task_id'], notify_email)
 
     return jsonify({
-        'message':    'Company export job has been queued. You will be notified when it completes.',
-        'task_id':    task.id,
-        'status_url': f'/api/admin/export/status/{task.id}',
-    }), 202
+        'message': (
+            'Company export job has been queued. You will be notified when it completes.'
+            if dispatched['queued']
+            else 'Company export completed successfully.'
+        ),
+        'task_id': dispatched['task_id'],
+        'status_url': f"/api/admin/export/status/{dispatched['task_id']}",
+        'state': 'PENDING' if dispatched['queued'] else 'SUCCESS',
+        'result': result,
+        'download_url': f'/api/admin/export/download/{filename}' if filename else None,
+    }), 202 if dispatched['queued'] else 200
 
 
 @export_bp.route('/status/<task_id>', methods=['GET'])

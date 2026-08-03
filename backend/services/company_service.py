@@ -7,17 +7,32 @@ from models.interview import Interview
 from models.result import Result
 from exceptions import NotFound, ValidationError, Forbidden
 from utils.stats import create_stat_item
-from utils.validators import validate_phone
+from utils.validators import validate_phone, validate_status_choice, validate_date_format
+from utils.email_templates import EmailTemplateBuilder
+from utils.repository import BaseRepository
 
 class CompanyService:
     """Service layer handling company-specific logic, placement drives and interviews."""
     
     @staticmethod
     def get_company_by_user(user_id):
-        company = db.session.query(Company).filter(Company.user_id == int(user_id)).first()
-        if not company:
-            raise NotFound('Company not found')
-        return company
+        return BaseRepository.get_by_field_or_404(Company, 'user_id', int(user_id), 'Company not found')
+
+    @classmethod
+    def get_owned_drive(cls, company, drive_id):
+        return BaseRepository.first_or_404(
+            db.session.query(PlacementDrive).filter(
+                PlacementDrive.id == drive_id,
+                PlacementDrive.company_id == company.id
+            ),
+            'Placement drive not found',
+        )
+
+    @classmethod
+    def get_owned_application(cls, company, app_id):
+        app = BaseRepository.get_by_id_or_404(Application, app_id, 'Application not found')
+        cls.verify_app_owner(company, app)
+        return app
 
     @classmethod
     def get_stats(cls, user_id):
@@ -96,10 +111,7 @@ class CompanyService:
 
         deadline_val = None
         if payload.get('deadline'):
-            try:
-                deadline_val = date.fromisoformat(payload['deadline'])
-            except ValueError:
-                raise ValidationError('Deadline date format should be YYYY-MM-DD')
+            deadline_val = validate_date_format(payload['deadline'], 'Deadline')
 
         drive = PlacementDrive(
             company_id=company.id,
@@ -110,7 +122,7 @@ class CompanyService:
             openings=payload.get('openings', 1),
             deadline=deadline_val,
             description=payload.get('description'),
-            status='pending'
+            status='open'
         )
 
         db.session.add(drive)
@@ -120,25 +132,13 @@ class CompanyService:
     @classmethod
     def get_drive(cls, user_id, drive_id):
         company = cls.get_company_by_user(user_id)
-        drive = db.session.query(PlacementDrive).filter(
-            PlacementDrive.id == drive_id,
-            PlacementDrive.company_id == company.id
-        ).first()
-        
-        if not drive:
-            raise NotFound('Placement drive not found')
+        drive = cls.get_owned_drive(company, drive_id)
         return drive.to_dict()
 
     @classmethod
     def update_drive(cls, user_id, drive_id, payload):
         company = cls.get_company_by_user(user_id)
-        drive = db.session.query(PlacementDrive).filter(
-            PlacementDrive.id == drive_id,
-            PlacementDrive.company_id == company.id
-        ).first()
-        
-        if not drive:
-            raise NotFound('Placement drive not found')
+        drive = cls.get_owned_drive(company, drive_id)
             
         updatable = ['title', 'job_role', 'package', 'eligibility', 'openings', 'description']
         for field in updatable:
@@ -146,13 +146,10 @@ class CompanyService:
                 setattr(drive, field, payload[field])
 
         if 'deadline' in payload and payload['deadline']:
-            try:
-                drive.deadline = date.fromisoformat(payload['deadline'])
-            except ValueError:
-                raise ValidationError('Deadline format should be YYYY-MM-DD')
+            drive.deadline = validate_date_format(payload['deadline'], 'Deadline')
 
-        if 'status' in payload and payload['status'] in ('pending', 'open', 'closed'):
-            drive.status = payload['status']
+        if 'status' in payload:
+            drive.status = validate_status_choice(payload['status'], ['pending', 'open', 'closed'])
 
         db.session.commit()
         return drive.to_dict()
@@ -160,13 +157,7 @@ class CompanyService:
     @classmethod
     def delete_drive(cls, user_id, drive_id):
         company = cls.get_company_by_user(user_id)
-        drive = db.session.query(PlacementDrive).filter(
-            PlacementDrive.id == drive_id,
-            PlacementDrive.company_id == company.id
-        ).first()
-        
-        if not drive:
-            raise NotFound('Placement drive not found')
+        drive = cls.get_owned_drive(company, drive_id)
             
         db.session.delete(drive)
         db.session.commit()
@@ -174,13 +165,7 @@ class CompanyService:
     @classmethod
     def close_drive(cls, user_id, drive_id):
         company = cls.get_company_by_user(user_id)
-        drive = db.session.query(PlacementDrive).filter(
-            PlacementDrive.id == drive_id,
-            PlacementDrive.company_id == company.id
-        ).first()
-        
-        if not drive:
-            raise NotFound('Placement drive not found')
+        drive = cls.get_owned_drive(company, drive_id)
             
         drive.status = 'closed'
         db.session.commit()
@@ -222,25 +207,12 @@ class CompanyService:
             student_name = student.user.name
             drive_title = app.drive.title if app.drive else 'Placement Drive'
             company_name = app.drive.company.company_name if app.drive and app.drive.company else 'Company'
+            status_display = str(status).capitalize()
+            subject = f"Application Status Update: {status_display} - {company_name}"
 
-            subject = f"Application Status Update: {status.capitalize()} - {company_name}"
-            status_display = status.capitalize()
-            details_html = f"<p style='background-color: #f8f9fa; padding: 10px; border-radius: 5px;'><strong>Details:</strong> {extra_info}</p>" if extra_info else ""
-
-            html_body = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-              <h2 style="color: #0d6efd; margin-top: 0;">Application Status Update</h2>
-              <p>Dear <strong>{student_name}</strong>,</p>
-              <p>Your application status for <strong>{drive_title}</strong> at <strong>{company_name}</strong> has been updated to:</p>
-              <div style="font-size: 20px; font-weight: bold; margin: 16px 0; padding: 12px; background-color: #eef2ff; color: #0d6efd; border-radius: 6px; text-align: center;">
-                {status_display}
-              </div>
-              {details_html}
-              <p>Please log in to your student placement dashboard for further information.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-              <p style="font-size: 12px; color: #888;">Automated notification from University Placement Portal</p>
-            </div>
-            """
+            html_body = EmailTemplateBuilder.build_status_update_email(
+                student_name, drive_title, company_name, status, extra_info
+            )
 
             send_email(recipient_email, subject, html_body)
             send_gchat_notification(f"Application Update: {student_name} -> {status_display} ({drive_title} at {company_name})")
@@ -251,11 +223,7 @@ class CompanyService:
     @classmethod
     def shortlist_student(cls, user_id, app_id):
         company = cls.get_company_by_user(user_id)
-        app = db.session.query(Application).filter(Application.id == app_id).first()
-        if not app:
-            raise NotFound('Application not found')
-
-        cls.verify_app_owner(company, app)
+        app = cls.get_owned_application(company, app_id)
         app.application_status = 'shortlisted'
 
         student = app.student
@@ -269,11 +237,7 @@ class CompanyService:
     @classmethod
     def reject_application(cls, user_id, app_id):
         company = cls.get_company_by_user(user_id)
-        app = db.session.query(Application).filter(Application.id == app_id).first()
-        if not app:
-            raise NotFound('Application not found')
-
-        cls.verify_app_owner(company, app)
+        app = cls.get_owned_application(company, app_id)
         app.application_status = 'rejected'
         db.session.commit()
         cls._notify_student_status_update(app, 'rejected')
@@ -281,17 +245,10 @@ class CompanyService:
 
     @classmethod
     def update_application_status(cls, user_id, app_id, new_status):
-        allowed = ['shortlisted', 'selected', 'rejected', 'interview', 'applied']
-        clean_status = (new_status or '').lower().strip()
-        if clean_status not in allowed:
-            raise ValidationError(f"Status must be one of: {', '.join(allowed)}")
+        clean_status = validate_status_choice(new_status, ['shortlisted', 'selected', 'rejected', 'interview', 'applied'])
 
         company = cls.get_company_by_user(user_id)
-        app = db.session.query(Application).filter(Application.id == app_id).first()
-        if not app:
-            raise NotFound('Application not found')
-
-        cls.verify_app_owner(company, app)
+        app = cls.get_owned_application(company, app_id)
         app.application_status = clean_status
 
         if app.student:
@@ -333,11 +290,7 @@ class CompanyService:
         if not app_id:
             raise ValidationError('application_id is required')
 
-        app = db.session.query(Application).filter(Application.id == app_id).first()
-        if not app:
-            raise NotFound('Application not found')
-
-        cls.verify_app_owner(company, app)
+        app = cls.get_owned_application(company, app_id)
 
         # Enforce Rule: Interview scheduling only allowed for shortlisted applicants
         if app.application_status not in ('shortlisted', 'interview'):
@@ -348,10 +301,7 @@ class CompanyService:
             db.session.add(interview)
 
         if payload.get('interview_date'):
-            try:
-                interview.interview_date = date.fromisoformat(payload['interview_date'])
-            except ValueError:
-                raise ValidationError('Interview date format should be YYYY-MM-DD')
+            interview.interview_date = validate_date_format(payload['interview_date'], 'Interview date')
 
         interview.interview_time = payload.get('interview_time')
         interview.interview_mode = payload.get('interview_mode', 'online')
@@ -372,9 +322,7 @@ class CompanyService:
     def send_interview_email(cls, user_id, interview_id):
         company = cls.get_company_by_user(user_id)
         
-        interview = db.session.query(Interview).filter(Interview.id == interview_id).first()
-        if not interview:
-            raise NotFound('Interview not found')
+        interview = BaseRepository.get_by_id_or_404(Interview, interview_id, 'Interview not found')
 
         app = interview.application
         if not app:
@@ -401,25 +349,9 @@ class CompanyService:
 
         subject = f"Interview Reminder: {round_name} - {company_name}"
 
-        html_body = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-            <h2 style="color: #0d6efd; margin-top: 0;">Interview Reminder</h2>
-            <p>Dear <strong>{student_name}</strong>,</p>
-            <p>This is a reminder for your upcoming interview for the <strong>{drive_title}</strong> role at <strong>{company_name}</strong>.</p>
-            
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p style="margin: 5px 0;"><strong>Round:</strong> {round_name}</p>
-                <p style="margin: 5px 0;"><strong>Date:</strong> {date_str}</p>
-                <p style="margin: 5px 0;"><strong>Time:</strong> {time_str}</p>
-                <p style="margin: 5px 0;"><strong>Mode:</strong> {mode_str}</p>
-                <p style="margin: 5px 0;"><strong>Link / Location:</strong> {link_str}</p>
-            </div>
-            
-            <p>Please ensure you are prepared and join on time. Best of luck!</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="font-size: 12px; color: #888;">Automated notification from University Placement Portal</p>
-        </div>
-        """
+        html_body = EmailTemplateBuilder.build_interview_reminder_email(
+            student_name, drive_title, company_name, round_name, date_str, time_str, mode_str, link_str
+        )
 
         success = send_email(recipient_email, subject, html_body)
         if not success:
@@ -460,14 +392,9 @@ class CompanyService:
         if not app_id:
             raise ValidationError('application_id is required')
 
-        if status_res not in ('selected', 'rejected'):
-            raise ValidationError('result_status must be selected or rejected')
+        status_res = validate_status_choice(payload.get('result_status'), ['selected', 'rejected'])
 
-        app = db.session.query(Application).filter(Application.id == app_id).first()
-        if not app:
-            raise NotFound('Application not found')
-
-        cls.verify_app_owner(company, app)
+        app = cls.get_owned_application(company, app_id)
 
         if app.result:
             app.result.result_status = status_res

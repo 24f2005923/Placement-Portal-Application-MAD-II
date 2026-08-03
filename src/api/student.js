@@ -1,32 +1,31 @@
 import httpClient from './axios'
+import { get, post, put, multipartPost, buildPath } from './http'
 
 export const studentAPI = {
   getStats: function () {
-    return httpClient.get('/api/student/stats')
+    return get('/api/student/stats')
   },
 
   getProfile: function () {
-    return httpClient.get('/api/student/profile')
+    return get('/api/student/profile')
   },
 
   updateProfile: function (payload) {
-    return httpClient.put('/api/student/profile', payload)
+    return put('/api/student/profile', payload)
   },
 
   uploadResume: function (file) {
     const formData = new FormData()
     formData.append('resume', file)
-    return httpClient.post('/api/student/resume', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    return multipartPost('/api/student/resume', formData)
   },
 
   getDrives: function (params) {
-    return httpClient.get('/api/student/drives', { params: params || {} })
+    return get('/api/student/drives', params)
   },
 
   getDrive: function (driveId) {
-    return httpClient.get('/api/student/drives/' + driveId)
+    return get(buildPath('/api/student/drives', driveId))
   },
 
   applyForDrive: function (driveId, coverNote, resumeFile) {
@@ -35,26 +34,24 @@ export const studentAPI = {
       formData.append('drive_id', driveId)
       if (coverNote) formData.append('cover_note', coverNote)
       formData.append('resume', resumeFile)
-      return httpClient.post('/api/student/applications', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      return multipartPost('/api/student/applications', formData)
     }
-    return httpClient.post('/api/student/applications', {
+    return post('/api/student/applications', {
       drive_id: driveId,
       cover_note: coverNote || ''
     })
   },
 
   getApplications: function () {
-    return httpClient.get('/api/student/applications')
+    return get('/api/student/applications')
   },
 
   getInterviews: function () {
-    return httpClient.get('/api/student/interviews')
+    return get('/api/student/interviews')
   },
 
   getHistory: function () {
-    return httpClient.get('/api/student/history')
+    return get('/api/student/history')
   },
 
   getOfferLetterUrl: function (appId) {
@@ -63,7 +60,7 @@ export const studentAPI = {
   },
 
   downloadOfferLetter: function (appId) {
-    return httpClient.get(`/api/student/applications/${appId}/offer-letter`, {
+    return httpClient.get(buildPath('/api/student/applications', appId, '/offer-letter'), {
       responseType: 'blob'
     })
   }

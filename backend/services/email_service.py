@@ -39,10 +39,10 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
         True if the email was sent (or logged in console mode),
         False if an error occurred.
     """
-    username = current_app.config.get('MAIL_USERNAME', '')
+    server   = current_app.config.get('MAIL_SERVER', '')
 
-    # ── Console mode — no SMTP credentials configured ─────────────
-    if not username:
+    # ── Console mode — explicitly set to console or empty ─────────
+    if not server or server.lower() == 'console':
         logger.info(
             '[EMAIL — CONSOLE MODE]\n'
             '  To: %s\n'
@@ -54,10 +54,10 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
 
     # ── Real SMTP send ────────────────────────────────────────────
     try:
-        server   = current_app.config['MAIL_SERVER']
         port     = current_app.config['MAIL_PORT']
         use_tls  = current_app.config['MAIL_USE_TLS']
-        password = current_app.config['MAIL_PASSWORD']
+        username = current_app.config.get('MAIL_USERNAME', '')
+        password = current_app.config.get('MAIL_PASSWORD', '')
         sender   = current_app.config['MAIL_SENDER']
 
         # Build the MIME message.
@@ -71,7 +71,8 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
         with smtplib.SMTP(server, port) as smtp_conn:
             if use_tls:
                 smtp_conn.starttls()
-            smtp_conn.login(username, password)
+            if username:
+                smtp_conn.login(username, password)
             smtp_conn.sendmail(sender, [to], message.as_string())
 
         logger.info('Email sent to %s | Subject: %s', to, subject)

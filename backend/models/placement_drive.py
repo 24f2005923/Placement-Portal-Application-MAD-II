@@ -1,6 +1,8 @@
 from datetime import date
 from models import db, TimestampMixin, DictMixin
 
+STUDENT_VISIBLE_STATUSES = ('open', 'approved')
+
 class PlacementDrive(db.Model, TimestampMixin, DictMixin):
     __tablename__ = 'placement_drives'
 
@@ -27,11 +29,33 @@ class PlacementDrive(db.Model, TimestampMixin, DictMixin):
 
     @property
     def is_accepting_applications(self):
-        if self.status != 'open':
+        if self.status not in STUDENT_VISIBLE_STATUSES:
             return False
         if self.deadline and date.today() > self.deadline:
             return False
+        if self.company and not self.company.is_approved:
+            return False
+        if self.company and self.company.user and not self.company.user.is_active:
+            return False
         return True
+
+    @classmethod
+    def student_visible_query(cls):
+        from models.company import Company
+        from models.user import User
+
+        return (
+            db.session.query(cls)
+            .join(Company)
+            .join(User, Company.user_id == User.id)
+            .filter(
+                cls.status.in_(STUDENT_VISIBLE_STATUSES),
+                db.or_(cls.deadline.is_(None), cls.deadline >= date.today()),
+                Company.approval_status == 'approved',
+                Company.blacklisted == False,
+                User.status == 'active',
+            )
+        )
 
     def to_dict(self, with_company=True):
         fields = [

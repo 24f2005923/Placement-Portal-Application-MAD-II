@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # environment variables defined in .env are visible to the rest of
 # the configuration — including the Celery worker process.
 _env_path = Path(__file__).resolve().parent / '.env'
-load_dotenv(_env_path, override=False)   # override=False: real env vars win over .env
+load_dotenv(_env_path, override=True)   # override=True: .env values override environment variables
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -32,6 +32,14 @@ class Config:
     JWT_SECRET_KEY          = os.environ.get('JWT_SECRET_KEY') or 'jwt-placement-portal-secret-key-2024!'
     JWT_ACCESS_TOKEN_EXPIRES  = timedelta(hours=8)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+
+    # -- Bootstrap admin ------------------------------------------
+    # Tables are created automatically on first startup. This optional
+    # admin account is the only startup data; no demo data is loaded.
+    SEED_ADMIN = os.environ.get('SEED_ADMIN', 'true').lower() == 'true'
+    DEFAULT_ADMIN_EMAIL = os.environ.get('DEFAULT_ADMIN_EMAIL') or 'admin@admin.com'
+    DEFAULT_ADMIN_PASSWORD = os.environ.get('DEFAULT_ADMIN_PASSWORD') or 'password'
+    DEFAULT_ADMIN_NAME = os.environ.get('DEFAULT_ADMIN_NAME') or 'Portal Admin'
 
     # ── File Uploads ─────────────────────────────────────────────
     UPLOAD_FOLDER       = os.path.join(ROOT_DIR, 'uploads', 'resumes')

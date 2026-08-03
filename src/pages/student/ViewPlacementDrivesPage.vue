@@ -45,14 +45,14 @@
 
       <template #action="{ row }">
         <router-link
-          v-if="!row.already_applied && row.status === 'open'"
+          v-if="!row.already_applied && row.is_active"
           :to="`/student/drives/${row.id}/apply`"
           class="btn btn-sm btn-primary rounded-pill px-3"
         >
           <i class="bi bi-send me-1"></i>Apply
         </router-link>
         <span v-else-if="row.already_applied" class="badge badge-soft-success px-3 py-2">Applied</span>
-        <span v-else-if="row.status === 'closed'" class="badge badge-soft-secondary px-3 py-2">Closed</span>
+        <span v-else class="badge badge-soft-secondary px-3 py-2">Closed</span>
       </template>
     </DataTable>
   </SectionCard>

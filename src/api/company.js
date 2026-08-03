@@ -1,4 +1,4 @@
-import api from './axios'
+import { get, post, put, del, buildPath } from './http'
 
 // company API calls
 
@@ -6,68 +6,68 @@ export const companyAPI = {
 
   // dashboard stats
   getStats: function () {
-    return api.get('/api/company/stats')
+    return get('/api/company/stats')
   },
 
   // profile
   getProfile: function () {
-    return api.get('/api/company/profile')
+    return get('/api/company/profile')
   },
   updateProfile: function (data) {
-    return api.put('/api/company/profile', data)
+    return put('/api/company/profile', data)
   },
 
   // placement drives
   getDrives: function () {
-    return api.get('/api/company/drives')
+    return get('/api/company/drives')
   },
   getDrive: function (driveId) {
-    return api.get('/api/company/drives/' + driveId)
+    return get(buildPath('/api/company/drives', driveId))
   },
   createDrive: function (driveData) {
-    return api.post('/api/company/drives', driveData)
+    return post('/api/company/drives', driveData)
   },
   updateDrive: function (driveId, driveData) {
-    return api.put('/api/company/drives/' + driveId, driveData)
+    return put(buildPath('/api/company/drives', driveId), driveData)
   },
   deleteDrive: function (driveId) {
-    return api.delete('/api/company/drives/' + driveId)
+    return del(buildPath('/api/company/drives', driveId))
   },
   closeDrive: function (driveId) {
-    return api.put('/api/company/drives/' + driveId + '/close')
+    return put(buildPath('/api/company/drives', driveId, '/close'))
   },
 
   // applications
   getApplications: function (params) {
-    return api.get('/api/company/applications', { params: params || {} })
+    return get('/api/company/applications', params)
   },
   shortlistApplication: function (appId) {
-    return api.put('/api/company/applications/' + appId + '/shortlist')
+    return put(buildPath('/api/company/applications', appId, '/shortlist'))
   },
   rejectApplication: function (appId) {
-    return api.put('/api/company/applications/' + appId + '/reject')
+    return put(buildPath('/api/company/applications', appId, '/reject'))
   },
   updateApplicationStatus: function (appId, newStatus) {
-    return api.put('/api/company/applications/' + appId + '/status', { status: newStatus })
+    return put(buildPath('/api/company/applications', appId, '/status'), { status: newStatus })
   },
 
   // interviews
   getInterviews: function () {
-    return api.get('/api/company/interviews')
+    return get('/api/company/interviews')
   },
   scheduleInterview: function (interviewData) {
-    return api.post('/api/company/interviews', interviewData)
+    return post('/api/company/interviews', interviewData)
   },
   sendInterviewEmail: function (interviewId) {
-    return api.post('/api/company/interviews/' + interviewId + '/email')
+    return post(buildPath('/api/company/interviews', interviewId, '/email'))
   },
 
   // results
   getResults: function () {
-    return api.get('/api/company/results')
+    return get('/api/company/results')
   },
   publishResult: function (resultData) {
-    return api.post('/api/company/results/publish', resultData)
+    return post('/api/company/results/publish', resultData)
   }
 
 }

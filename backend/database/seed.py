@@ -4,31 +4,34 @@ from models.user import User
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ADMIN_EMAIL = 'admin@admin.com'
-DEFAULT_ADMIN_PWD = 'password'
-DEFAULT_ADMIN_NAME = 'Portal Admin'
-
 def seed_admin():
-    """Seeds the default portal administrator account if it does not exist."""
-    existing_admin = db.session.query(User).filter(User.role == 'admin').first()
-    email_holder = db.session.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
-    
-    if email_holder is not None and email_holder.role != 'admin':
-        logger.warning(f"Admin seeding skipped: Email {DEFAULT_ADMIN_EMAIL} belongs to a non-admin account.")
+    """Create the initial administrator account only when no admin exists."""
+    from flask import current_app
+
+    if not current_app.config.get('SEED_ADMIN', True):
+        logger.info("Administrator bootstrap disabled by SEED_ADMIN=false.")
         return
 
-    if existing_admin is None:
-        user_to_seed = email_holder if email_holder is not None else User(role='admin')
-    else:
-        user_to_seed = existing_admin
+    existing_admin = db.session.query(User).filter(User.role == 'admin').first()
+    if existing_admin is not None:
+        logger.info("Administrator bootstrap skipped because an admin already exists.")
+        return
 
-    user_to_seed.name = DEFAULT_ADMIN_NAME
-    user_to_seed.email = DEFAULT_ADMIN_EMAIL
-    user_to_seed.role = 'admin'
-    user_to_seed.status = 'active'
-    user_to_seed.set_password(DEFAULT_ADMIN_PWD)
+    admin_email = current_app.config['DEFAULT_ADMIN_EMAIL'].lower().strip()
+    email_holder = db.session.query(User).filter(User.email == admin_email).first()
+    if email_holder is not None:
+        logger.warning("Administrator bootstrap skipped: %s belongs to a non-admin account.", admin_email)
+        return
+
+    user_to_seed = User(
+        name=current_app.config['DEFAULT_ADMIN_NAME'],
+        email=admin_email,
+        role='admin',
+        status='active',
+    )
+    user_to_seed.set_password(current_app.config['DEFAULT_ADMIN_PASSWORD'])
 
     db.session.add(user_to_seed)
     db.session.commit()
 
-    logger.info("Administrator seed verification complete.")
+    logger.info("Initial administrator account created.")

@@ -1,9 +1,11 @@
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity
 from middleware.auth_middleware import student_required
 from services.student_service import StudentService
-from cache import cache
 from cache.decorators import cache_response
+from utils.cache_manager import CacheManager
+from utils.request_helpers import json_payload, query_text
+from utils.responses import success_response, error_response, created_response
 
 student_bp = Blueprint('student_routes', __name__, url_prefix='/api/student')
 
@@ -13,7 +15,7 @@ student_bp = Blueprint('student_routes', __name__, url_prefix='/api/student')
 def get_student_stats():
     uid = get_jwt_identity()
     stats = StudentService.get_stats(uid)
-    return jsonify({'stats': stats}), 200
+    return success_response({'stats': stats})
 
 @student_bp.route('/profile', methods=['GET'])
 @student_required
@@ -21,37 +23,35 @@ def get_student_stats():
 def get_profile():
     uid = get_jwt_identity()
     profile = StudentService.get_profile(uid)
-    return jsonify({'student': profile}), 200
+    return success_response({'student': profile})
 
 @student_bp.route('/profile', methods=['PUT'])
 @student_required
 def update_profile():
     uid = get_jwt_identity()
-    payload = request.get_json() or {}
+    payload = json_payload()
     profile = StudentService.update_profile(uid, payload)
     
-    cache.delete(f'student:profile:{uid}')
-    cache.delete(f'student:stats:{uid}')
+    CacheManager.invalidate_student(student_id=None, user_id=uid)
     
-    return jsonify({'message': 'Profile updated successfully', 'student': profile}), 200
+    return success_response({'student': profile}, 'Profile updated successfully')
 
 @student_bp.route('/resume', methods=['POST'])
 @student_required
 def upload_resume():
     uid = get_jwt_identity()
     if 'resume' not in request.files:
-        return jsonify({'error': 'No file uploaded. Use field name "resume"'}), 400
+        return error_response('No file uploaded. Use field name "resume"', 400)
 
     file_obj = request.files['resume']
     saved_filename = StudentService.upload_resume(uid, file_obj)
     
-    cache.delete(f'student:profile:{uid}')
+    CacheManager.invalidate_student(student_id=None, user_id=uid)
     
-    return jsonify({
-        'message': 'Resume uploaded successfully',
+    return success_response({
         'resume_path': saved_filename,
         'resume_url': f"/api/student/resume/{saved_filename}"
-    }), 200
+    }, 'Resume uploaded successfully')
 
 @student_bp.route('/resume/<filename>', methods=['GET'])
 def get_resume(filename):
@@ -67,9 +67,9 @@ def get_resume(filename):
             from flask_jwt_extended import decode_token
             decode_token(token)
         except Exception:
-            return jsonify({'error': 'Invalid or expired token'}), 401
+            return error_response('Invalid or expired token', 401)
     else:
-        return jsonify({'error': 'Missing authorization token'}), 401
+        return error_response('Missing authorization token', 401)
 
     from flask import current_app
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
@@ -77,21 +77,21 @@ def get_resume(filename):
 @student_bp.route('/drives', methods=['GET'])
 @student_required
 @cache_response(
-    lambda: f"student:drives:{get_jwt_identity()}:{request.args.get('search','').strip().lower()}",
+    lambda: f"student:drives:{get_jwt_identity()}:{query_text('search').lower()}",
     ttl=120
 )
 def list_open_drives():
     uid = get_jwt_identity()
-    search_query = request.args.get('search', '').strip()
+    search_query = query_text('search')
     drives = StudentService.list_open_drives(uid, search_query)
-    return jsonify({'drives': drives}), 200
+    return success_response({'drives': drives})
 
 @student_bp.route('/drives/<int:drive_id>', methods=['GET'])
 @student_required
 def get_drive_details(drive_id):
     uid = get_jwt_identity()
     drive_dict = StudentService.get_drive_details(uid, drive_id)
-    return jsonify({'drive': drive_dict}), 200
+    return success_response({'drive': drive_dict})
 
 @student_bp.route('/applications', methods=['POST'])
 @student_required
@@ -99,7 +99,7 @@ def apply_for_drive():
     uid = get_jwt_identity()
     resume_file = None
     if request.is_json:
-        payload = request.get_json() or {}
+        payload = json_payload()
         drive_id = payload.get('drive_id')
         cover_note = payload.get('cover_note')
     else:
@@ -108,28 +108,24 @@ def apply_for_drive():
         resume_file = request.files.get('resume')
     
     if not drive_id:
-        return jsonify({'error': 'drive_id is required'}), 400
+        return error_response('drive_id is required', 400)
 
     app = StudentService.apply_for_drive(uid, int(drive_id), cover_note, resume_file=resume_file)
     
-    cache.delete(f'student:stats:{uid}')
-    cache.delete_pattern(f'student:drives:{uid}:*')
-    cache.delete_pattern('company:applications:*')
-    cache.delete_pattern('company:drives:*')
-    cache.delete('admin:stats')
-    cache.delete('admin:activities')
+    CacheManager.invalidate_student(student_id=None, user_id=uid)
+    CacheManager.invalidate_application()
+    CacheManager.invalidate_admin_stats()
     
-    return jsonify({
-        'message': 'Application submitted successfully',
+    return created_response({
         'application': app
-    }), 201
+    }, 'Application submitted successfully')
 
 @student_bp.route('/applications', methods=['GET'])
 @student_required
 def get_my_applications():
     uid = get_jwt_identity()
     apps = StudentService.get_my_applications(uid)
-    return jsonify({'applications': apps}), 200
+    return success_response({'applications': apps})
 
 @student_bp.route('/applications/<int:app_id>/offer-letter', methods=['GET'])
 @student_required
@@ -147,11 +143,11 @@ def download_offer_letter(app_id):
 def get_my_interviews():
     uid = get_jwt_identity()
     interviews = StudentService.get_my_interviews(uid)
-    return jsonify({'interviews': interviews}), 200
+    return success_response({'interviews': interviews})
 
 @student_bp.route('/history', methods=['GET'])
 @student_required
 def get_placement_history():
     uid = get_jwt_identity()
     history = StudentService.get_placement_history(uid)
-    return jsonify({'history': history}), 200
+    return success_response({'history': history})

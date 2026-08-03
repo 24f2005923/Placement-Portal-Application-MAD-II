@@ -7,6 +7,8 @@ from models.user import User
 from exceptions import NotFound, ValidationError
 from utils.pagination import paginate_query
 from utils.stats import create_stat_item
+from utils.repository import BaseRepository
+from utils.validators import validate_status_choice
 
 class PortalSettings:
     """Manages system settings for the placement portal."""
@@ -122,10 +124,8 @@ class AdminService:
 
     @staticmethod
     def get_student_detail(student_id):
-        student = db.session.query(Student).filter(Student.id == student_id).first()
-        if not student:
-            raise NotFound('Student not found')
-            
+        student = BaseRepository.get_by_id_or_404(Student, student_id, 'Student not found')
+        
         student_dict = student.to_dict()
         student_dict['placement_history'] = [
             {
@@ -140,9 +140,7 @@ class AdminService:
 
     @staticmethod
     def update_student(student_id, payload):
-        student = db.session.query(Student).filter(Student.id == student_id).first()
-        if not student:
-            raise NotFound('Student not found')
+        student = BaseRepository.get_by_id_or_404(Student, student_id, 'Student not found')
 
         if 'name' in payload:
             student.user.name = payload['name']
@@ -164,12 +162,8 @@ class AdminService:
 
     @staticmethod
     def change_student_status(student_id, new_status):
-        if new_status not in ('active', 'inactive'):
-            raise ValidationError('Status must be active or inactive')
-            
-        student = db.session.query(Student).filter(Student.id == student_id).first()
-        if not student:
-            raise NotFound('Student not found')
+        validate_status_choice(new_status, ['active', 'inactive'])
+        student = BaseRepository.get_by_id_or_404(Student, student_id, 'Student not found')
 
         student.user.status = new_status
         db.session.commit()
@@ -210,16 +204,12 @@ class AdminService:
 
     @staticmethod
     def get_company_detail(company_id):
-        company = db.session.query(Company).filter(Company.id == company_id).first()
-        if not company:
-            raise NotFound('Company not found')
+        company = BaseRepository.get_by_id_or_404(Company, company_id, 'Company not found')
         return company.to_dict(show_drives=True)
 
     @staticmethod
     def update_company_approval(company_id, status_val):
-        company = db.session.query(Company).filter(Company.id == company_id).first()
-        if not company:
-            raise NotFound('Company not found')
+        company = BaseRepository.get_by_id_or_404(Company, company_id, 'Company not found')
         company.approval_status = status_val
         if status_val == 'approved':
             company.blacklisted = False
@@ -227,9 +217,7 @@ class AdminService:
 
     @staticmethod
     def blacklist_company(company_id, blacklisted_bool):
-        company = db.session.query(Company).filter(Company.id == company_id).first()
-        if not company:
-            raise NotFound('Company not found')
+        company = BaseRepository.get_by_id_or_404(Company, company_id, 'Company not found')
         company.blacklisted = blacklisted_bool
         db.session.commit()
 
@@ -258,20 +246,13 @@ class AdminService:
 
     @staticmethod
     def get_drive_detail(drive_id):
-        drive = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
-        if not drive:
-            raise NotFound('Drive not found')
+        drive = BaseRepository.get_by_id_or_404(PlacementDrive, drive_id, 'Drive not found')
         return drive.to_dict()
 
     @staticmethod
     def update_drive_status(drive_id, status_val):
-        allowed = ['pending', 'open', 'closed', 'rejected']
-        if status_val not in allowed:
-            raise ValidationError(f"Status must be one of: {', '.join(allowed)}")
-            
-        drive = db.session.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
-        if not drive:
-            raise NotFound('Drive not found')
+        validate_status_choice(status_val, ['pending', 'open', 'closed', 'rejected'])
+        drive = BaseRepository.get_by_id_or_404(PlacementDrive, drive_id, 'Drive not found')
             
         drive.status = status_val
         db.session.commit()
@@ -303,14 +284,9 @@ class AdminService:
 
     @staticmethod
     def update_application_status(application_id, status_val):
-        allowed = ['applied', 'shortlisted', 'interview', 'selected', 'rejected']
-        clean_status = (status_val or '').lower().strip()
-        if clean_status not in allowed:
-            raise ValidationError(f"Status must be one of: {', '.join(allowed)}")
+        clean_status = validate_status_choice(status_val, ['applied', 'shortlisted', 'interview', 'selected', 'rejected'])
 
-        app = db.session.query(Application).filter(Application.id == application_id).first()
-        if not app:
-            raise NotFound('Application not found')
+        app = BaseRepository.get_by_id_or_404(Application, application_id, 'Application not found')
 
         app.application_status = clean_status
 

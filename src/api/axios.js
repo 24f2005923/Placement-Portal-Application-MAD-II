@@ -52,6 +52,15 @@ httpClient.interceptors.response.use(
         localStorage.clear()
         window.location.href = '/auth/login'
       }
+    } else {
+      // Global error handling for non-401 errors
+      const errorMsg = errorResponse.response?.data?.error || errorResponse.response?.data?.message || 'An unexpected error occurred'
+      
+      // Dispatch custom event to GlobalToast
+      const event = new CustomEvent('app-toast', {
+        detail: { message: errorMsg, variant: 'danger', duration: 4000 }
+      })
+      window.dispatchEvent(event)
     }
 
     return Promise.reject(errorResponse)

@@ -1,5 +1,6 @@
 import re
 from exceptions import ValidationError
+from datetime import date
 
 def validate_phone(phone, field_name="Phone number"):
     """
@@ -57,3 +58,18 @@ def validate_password(password, field_name="Password"):
         raise ValidationError(f"{field_name} must contain at least one special character")
     
     return pwd_str
+
+def validate_status_choice(status, allowed, field_name="Status"):
+    """Validates that a given status string is in the allowed list."""
+    if not status or str(status).strip().lower() not in allowed:
+        raise ValidationError(f"{field_name} must be one of: {', '.join(allowed)}")
+    return str(status).strip().lower()
+
+def validate_date_format(date_str, field_name="Date"):
+    """Validates that a given string is a valid ISO format date (YYYY-MM-DD)."""
+    if not date_str:
+        return None
+    try:
+        return date.fromisoformat(str(date_str).strip())
+    except ValueError:
+        raise ValidationError(f"{field_name} format should be YYYY-MM-DD")

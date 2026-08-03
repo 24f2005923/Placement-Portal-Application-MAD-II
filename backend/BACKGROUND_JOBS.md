@@ -81,10 +81,11 @@ MAIL_PASSWORD=mailhog
 MAIL_SENDER=noreply@placement-portal.local
 ```
 
-> **Why MAIL_USERNAME must not be empty:** `email_service.py` checks whether
-> `MAIL_USERNAME` is set. An empty value activates console mode (emails printed
-> to the log). Any non-empty string activates real SMTP delivery. MailHog
-> accepts any username/password, so the values above are intentional.
+> **How email mode is determined:** `email_service.py` checks `MAIL_SERVER`.
+> If it is empty or set to `console`, emails are printed to the log (console mode).
+> Setting `MAIL_SERVER=localhost` activates real SMTP delivery via MailHog on port 1025.
+> MailHog accepts any username/password — the values above are intentional placeholders.
+> See **MAILHOG_SETUP.md** in the project root for complete setup instructions.
 
 ---
 
@@ -415,9 +416,9 @@ the Redis status.
 ## Notification Services
 
 ### Email
-- **Console mode** (default): Email content is printed to the log. No SMTP server required.
-- **MailHog mode** (local testing): Set `MAIL_SERVER=localhost`, `MAIL_PORT=1025`, `MAIL_USE_TLS=false`. You can view the emails in the MailHog web UI (usually `http://localhost:8025`).
-- **SMTP mode** (production): Set `MAIL_SERVER=smtp.gmail.com` and provide `MAIL_USERNAME` / `MAIL_PASSWORD`. Use an App Password for Gmail.
+- **Console mode** (fallback): Activated when `MAIL_SERVER` is empty or set to `console`. Email content is printed to the log. No SMTP server required.
+- **MailHog mode** (default for local dev): Set `MAIL_SERVER=localhost`, `MAIL_PORT=1025`, `MAIL_USE_TLS=false`. All emails appear in the MailHog web inbox at `http://localhost:8025`. See **MAILHOG_SETUP.md** for full setup instructions.
+- **SMTP mode** (production): Set `MAIL_SERVER=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_USE_TLS=true`, and provide `MAIL_USERNAME` / `MAIL_PASSWORD`. Use an App Password for Gmail.
 
 ### Google Chat
 - Leave `GCHAT_WEBHOOK_URL` blank to skip GChat notifications.

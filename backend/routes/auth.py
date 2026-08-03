@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
@@ -9,12 +9,14 @@ from models import db
 from models.user import User
 from services.auth_service import AuthService
 from exceptions import NotFound
+from utils.request_helpers import json_payload
+from utils.responses import success_response, created_response
 
 auth_bp = Blueprint('auth_routes', __name__, url_prefix='/api/auth')
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    payload = request.get_json() or {}
+    payload = json_payload()
     identifier = payload.get('email') or payload.get('register_no') or payload.get('register_number') or payload.get('identifier', '')
     pwd_input = payload.get('password', '')
     requested_role = payload.get('role')
@@ -29,20 +31,15 @@ def login():
 
 @auth_bp.route('/register/student', methods=['POST'])
 def register_student():
-    payload = request.get_json() or {}
+    payload = json_payload()
     student_id = AuthService.register_student(payload)
-    return jsonify({
-        'message': 'Student registered successfully',
-        'student_id': student_id
-    }), 201
+    return created_response({'student_id': student_id}, 'Student registered successfully')
 
 @auth_bp.route('/register/company', methods=['POST'])
 def register_company():
-    payload = request.get_json() or {}
+    payload = json_payload()
     AuthService.register_company(payload)
-    return jsonify({
-        'message': 'Company registered. Waiting for admin approval.'
-    }), 201
+    return created_response(message='Company registered. Waiting for admin approval.')
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
@@ -56,7 +53,7 @@ def refresh_token():
     }
     
     new_access_token = create_access_token(identity=active_identity, additional_claims=refreshed_claims)
-    return jsonify({'access_token': new_access_token}), 200
+    return success_response({'access_token': new_access_token})
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
@@ -67,9 +64,9 @@ def get_current_user():
     if user_record is None:
         raise NotFound('User not found')
         
-    return jsonify({'user': user_record.to_dict()}), 200
+    return success_response({'user': user_record.to_dict()})
 
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
-    return jsonify({'message': 'Logged out successfully'}), 200
+    return success_response(message='Logged out successfully')

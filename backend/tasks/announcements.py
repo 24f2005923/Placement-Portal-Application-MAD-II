@@ -9,6 +9,7 @@ from celery_app import celery
 from models import db
 from models.user import User
 from services.email_service import send_bulk_emails
+from utils.email_templates import EmailTemplateBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -48,43 +49,7 @@ def weekly_login_reminder():
     to all active students.
     """
     subject = "🎓 Placement Portal — Weekly Login Reminder"
-    
-    body_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body        { font-family: Arial, sans-serif; color: #333; background: #f5f5f5; margin: 0; padding: 0; }
-        .container  { max-width: 600px; margin: 30px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .header     { background: #4f46e5; color: #fff; padding: 28px 32px; text-align: center; }
-        .header h1  { margin: 0; font-size: 22px; }
-        .body       { padding: 28px 32px; }
-        .body p     { line-height: 1.6; }
-        .button     { display: inline-block; background: #4f46e5; color: #ffffff !important; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 15px; }
-        .footer     { background: #f9f9f9; padding: 16px 32px; font-size: 12px; color: #888; border-top: 1px solid #eee; text-align: center; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Reminder to Login</h1>
-        </div>
-        <div class="body">
-          <p>Hello Students!</p>
-          <p>This is a friendly reminder to log in to the Placement Portal and check your dashboard. New placement drives or announcements may have been posted!</p>
-          <p>Keeping your profile updated and checking regularly ensures you don't miss any deadlines.</p>
-          <center>
-            <a href="http://localhost:5173/login" class="button">Go to Placement Portal</a>
-          </center>
-        </div>
-        <div class="footer">
-          <p>This is an automated notification. Please do not reply to this email.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """
+    body_html = EmailTemplateBuilder.build_weekly_login_reminder()
     
     # Call the generic mass email task synchronously
     return send_mass_announcement(subject=subject, body_html=body_html, target_role='student')

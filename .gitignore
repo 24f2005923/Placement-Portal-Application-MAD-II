@@ -60,6 +60,10 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
 
 # Flask stuff:
 instance/
@@ -130,6 +134,16 @@ __pypackages__/
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid
+
+# Placement Portal runtime artifacts
+backend/database/*.db
+backend/database/*.db-journal
+backend/exports/*
+backend/reports/*
+backend/uploads/resumes/*
+!backend/exports/.gitkeep
+!backend/reports/.gitkeep
+!backend/uploads/resumes/.gitkeep
 
 # Redis
 *.rdb

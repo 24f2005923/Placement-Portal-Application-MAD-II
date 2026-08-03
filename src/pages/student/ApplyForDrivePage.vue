@@ -22,7 +22,7 @@
       </div>
 
       <!-- Closed Drive Banner -->
-      <div v-else-if="drive.status === 'closed'" class="alert alert-warning mb-4">
+      <div v-else-if="!drive.is_active" class="alert alert-warning mb-4">
         <i class="bi bi-slash-circle me-2"></i>
         This placement drive is closed and is no longer accepting new applications.
       </div>
@@ -40,7 +40,7 @@
         <p class="small mt-2 mb-0">{{ drive.eligibility }}</p>
       </div>
 
-      <form v-if="!drive.already_applied && drive.status === 'open'" class="row g-3" @submit.prevent="handleApply">
+      <form v-if="!drive.already_applied && drive.is_active" class="row g-3" @submit.prevent="handleApply">
         <div class="col-12">
           <label class="form-label">Resume Upload</label>
           <div v-if="profileResume" class="alert alert-light border mb-2 d-flex align-items-center justify-content-between">

@@ -1,4 +1,5 @@
 import httpClient from './axios'
+import { get, post } from './http'
 
 export const authAPI = {
   login: function (emailInput, passwordInput, roleInput) {
@@ -6,23 +7,23 @@ export const authAPI = {
     if (roleInput) {
       payload.role = roleInput
     }
-    return httpClient.post('/api/auth/login', payload)
+    return post('/api/auth/login', payload)
   },
 
   registerStudent: function (payload) {
-    return httpClient.post('/api/auth/register/student', payload)
+    return post('/api/auth/register/student', payload)
   },
 
   registerCompany: function (payload) {
-    return httpClient.post('/api/auth/register/company', payload)
+    return post('/api/auth/register/company', payload)
   },
 
   logout: function () {
-    return httpClient.post('/api/auth/logout')
+    return post('/api/auth/logout')
   },
 
   getCurrentUser: function () {
-    return httpClient.get('/api/auth/me')
+    return get('/api/auth/me')
   },
 
   refreshToken: function () {

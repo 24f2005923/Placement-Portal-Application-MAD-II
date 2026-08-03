@@ -13,6 +13,9 @@ from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from middleware.auth_middleware import admin_required
 from services.admin_service import AdminService
 from cache.decorators import cache_response
+from utils.request_helpers import json_payload
+from utils.responses import success_response
+from utils.task_runner import dispatch_task
 
 report_bp = Blueprint('report_routes', __name__, url_prefix='/api/admin/reports')
 
@@ -28,7 +31,7 @@ def get_placement_analytics():
     no records exist — never returns fabricated values.
     """
     analytics = AdminService.get_report_analytics()
-    return jsonify({'analytics': analytics}), 200
+    return success_response({'analytics': analytics})
 
 
 @report_bp.route('/companies/top', methods=['GET'])
@@ -42,7 +45,7 @@ def get_top_hiring_companies():
     """
     limit = min(int(request.args.get('limit', 10)), 50)
     companies = AdminService.get_top_companies(limit=limit)
-    return jsonify({'companies': companies}), 200
+    return success_response({'companies': companies})
 
 
 @report_bp.route('/generate', methods=['POST'])
@@ -51,17 +54,25 @@ def generate_report():
     """Queue asynchronous monthly placement report generation task."""
     from tasks.monthly_reports import generate_monthly_report
 
-    payload = request.get_json() or {}
+    payload = json_payload()
     year  = payload.get('year')
     month = payload.get('month')
 
-    task = generate_monthly_report.delay(target_year=year, target_month=month)
+    dispatched = dispatch_task(generate_monthly_report, target_year=year, target_month=month)
+    result = dispatched['result'] or {}
 
     return jsonify({
-        'message': 'Monthly placement report generation task queued',
-        'task_id': task.id,
-        'status_url': f'/api/admin/reports/status/{task.id}'
-    }), 202
+        'message': (
+            'Monthly placement report generation task queued'
+            if dispatched['queued']
+            else 'Monthly placement report generated successfully'
+        ),
+        'task_id': dispatched['task_id'],
+        'status_url': f"/api/admin/reports/status/{dispatched['task_id']}",
+        'state': 'PENDING' if dispatched['queued'] else 'SUCCESS',
+        'result': result,
+        'download_url': result.get('download_url'),
+    }), 202 if dispatched['queued'] else 200
 
 
 @report_bp.route('/status/<task_id>', methods=['GET'])
@@ -87,7 +98,7 @@ def list_reports():
     """List all available generated monthly reports in REPORTS_FOLDER."""
     reports_base = current_app.config['REPORTS_FOLDER']
     if not os.path.exists(reports_base):
-        return jsonify({'reports': []}), 200
+        return success_response({'reports': []})
 
     reports = []
     for month_dir in sorted(os.listdir(reports_base), reverse=True):
@@ -102,7 +113,7 @@ def list_reports():
                     'download_url': f"/api/admin/reports/download/{month_dir}/report.html"
                 })
 
-    return jsonify({'reports': reports}), 200
+    return success_response({'reports': reports})
 
 
 @report_bp.route('/download/<path:fname>', methods=['GET'])

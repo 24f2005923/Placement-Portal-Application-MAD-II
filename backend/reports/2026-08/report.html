@@ -1,79 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Monthly Placement Report — August 2026</title>
   <style>
-    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 30px; color: #222; background: #fafafa; }
-    .report-card { background: #fff; border-radius: 12px; padding: 30px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .header { border-bottom: 3px solid #0d6efd; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-    .title { font-size: 26px; font-weight: bold; color: #0d6efd; }
-    .subtitle { font-size: 13px; color: #666; margin-top: 4px; }
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
-    .stat-box { background: #f8f9fa; border: 1px solid #e9ecef; padding: 18px; border-radius: 8px; text-align: center; }
-    .stat-val { font-size: 24px; font-weight: bold; color: #0d6efd; margin-top: 5px; }
-    .stat-lbl { font-size: 12px; text-transform: uppercase; color: #666; font-weight: 600; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
-    th { background-color: #f1f5f9; font-weight: 600; color: #334155; }
-    .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; background: #22c55e; color: #fff; font-weight: bold; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #888; display: flex; justify-content: space-between; }
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 32px; color: #1e293b; background: #f8fafc; }
+    .card { background: #fff; border-radius: 12px; padding: 32px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 28px; }
+    .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .title  { font-size: 24px; font-weight: 700; color: #2563eb; }
+    .sub    { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi  { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; text-align: center; }
+    .kpi-val  { font-size: 28px; font-weight: 700; color: #2563eb; }
+    .kpi-lbl  { font-size: 11px; text-transform: uppercase; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+    .kpi-sub  { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    h3  { font-size: 16px; font-weight: 600; color: #334155; margin: 0 0 14px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+    th  { background: #f8fafc; font-weight: 600; color: #475569; }
+    .badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .bg-success { background: #22c55e; color: #fff; }
+    .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; }
   </style>
 </head>
 <body>
-  <div class="report-card">
+  <div class="card">
     <div class="header">
       <div>
         <div class="title">Monthly Placement Report — August 2026</div>
-        <div class="subtitle">Official Executive Placement & Hiring Analytics Summary</div>
+        <div class="sub">University Placement Portal · Executive Analytics Summary</div>
       </div>
-      <div style="font-size: 12px; text-align: right; color: #666;">
-        Generated: August 02, 2026 16:38 UTC<br/>
+      <div style="font-size:11px; text-align:right; color:#64748b;">
+        Generated: August 03, 2026 10:25 UTC<br>
         Report ID: RPT-2026-08
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-box">
-        <div class="stat-lbl">Placement Rate</div>
-        <div class="stat-val">50.0%</div>
-        <small style="font-size:11px; color:#555;">6 of 12 Students</small>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-lbl">Placement Rate</div>
+        <div class="kpi-val">0.0%</div>
+        <div class="kpi-sub">0 of 5 students</div>
       </div>
-      <div class="stat-box">
-        <div class="stat-lbl">Active Drives</div>
-        <div class="stat-val">8</div>
-        <small style="font-size:11px; color:#555;">2 Open • 6 Closed</small>
+      <div class="kpi">
+        <div class="kpi-lbl">Total Drives</div>
+        <div class="kpi-val">2</div>
+        <div class="kpi-sub">2 open · 0 closed</div>
       </div>
-      <div class="stat-box">
-        <div class="stat-lbl">Shortlist Rate</div>
-        <div class="stat-val">100.0%</div>
-        <small style="font-size:11px; color:#555;">6 Shortlisted</small>
+      <div class="kpi">
+        <div class="kpi-lbl">Shortlist Rate</div>
+        <div class="kpi-val">100.0%</div>
+        <div class="kpi-sub">2 shortlisted</div>
       </div>
-      <div class="stat-box">
-        <div class="stat-lbl">Final Selections</div>
-        <div class="stat-val">6</div>
-        <small style="font-size:11px; color:#555;">100.0% Conversion</small>
+      <div class="kpi">
+        <div class="kpi-lbl">Final Selections</div>
+        <div class="kpi-val">0</div>
+        <div class="kpi-sub">0.0% conversion rate</div>
       </div>
     </div>
 
-    <h3>Top Participating Hiring Partners</h3>
+    <h3>Top Hiring Partners</h3>
     <table>
       <thead>
         <tr>
-          <th>Company Name</th>
-          <th>Industry</th>
-          <th>Drives Conducted</th>
-          <th>Selections / Placements</th>
+          <th>Company</th><th>Industry</th><th>Drives</th>
+          <th>Applications</th><th>Selections</th>
         </tr>
       </thead>
-      <tbody>
-        <tr><td><strong>Apex Innovations</strong></td><td>Software</td><td>7</td><td><span class='badge bg-success'>6 Placed</span></td></tr><tr><td><strong>axion</strong></td><td>axion</td><td>0</td><td><span class='badge bg-success'>0 Placed</span></td></tr><tr><td><strong>Odak</strong></td><td>Odak</td><td>1</td><td><span class='badge bg-success'>0 Placed</span></td></tr>
-      </tbody>
+      <tbody><tr><td><strong>axion</strong></td><td>axion</td><td>1</td><td>1</td><td><span class='badge bg-success'>0 placed</span></td></tr><tr><td><strong>Odak</strong></td><td>Odak</td><td>1</td><td>1</td><td><span class='badge bg-success'>0 placed</span></td></tr></tbody>
+    </table>
+
+    <h3 style="margin-top:28px;">Department-wise Placement</h3>
+    <table>
+      <thead>
+        <tr><th>Department</th><th>Total</th><th>Placed</th><th>Rate</th></tr>
+      </thead>
+      <tbody><tr><td>informaiton technology</td><td>1</td><td>0</td><td>0.0%</td></tr><tr><td>computer</td><td>1</td><td>0</td><td>0.0%</td></tr><tr><td>btech</td><td>1</td><td>0</td><td>0.0%</td></tr><tr><td>bba</td><td>1</td><td>0</td><td>0.0%</td></tr><tr><td>CS</td><td>1</td><td>0</td><td>0.0%</td></tr></tbody>
     </table>
 
     <div class="footer">
-      <span>University Placement Portal • Analytics Module</span>
-      <span>Verified System Artifact</span>
+      <span>University Placement Portal · Analytics Module</span>
+      <span>All data sourced from live database records</span>
     </div>
   </div>
 </body>
