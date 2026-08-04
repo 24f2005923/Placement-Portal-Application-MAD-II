@@ -153,14 +153,13 @@ async function fetchInterviews() {
 
 async function sendEmail(interviewId) {
   sendingEmailId.value = interviewId
-  error.value = ''
-  success.value = ''
+  clearMessages()
   try {
     const { data } = await companyAPI.sendInterviewEmail(interviewId)
-    success.value = data.message || 'Email sent successfully.'
+    showSuccess(data.message || 'Email sent successfully.')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to send email.'
+    showError(err.response?.data?.error || 'Failed to send email.')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } finally {
     sendingEmailId.value = null

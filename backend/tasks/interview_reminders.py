@@ -25,7 +25,6 @@ from celery_app import celery
 from models import db
 from models.interview import Interview
 from models.application import Application
-from models.student import Student
 from models.interview_reminder_history import InterviewReminderHistory
 from services.email_service import send_email
 from services.gchat_service import send_gchat_message
@@ -147,8 +146,8 @@ def send_interview_reminders(self):
             # where two workers dispatch simultaneously for the same record.
             try:
                 history_entry = InterviewReminderHistory(
-                    student_id =student.id,
-                    interview_id =interview.id,
+                    student_id=student.id,
+                    interview_id=interview.id,
                 )
                 db.session.add(history_entry)
                 db.session.commit()
@@ -174,6 +173,7 @@ def send_interview_reminders(self):
 
     except Exception as exc:
         logger.error('Interview reminder task failed: %s', exc, exc_info=True)
+        db.session.rollback()
         # Retry automatically up to max_retries times.
         raise self.retry(exc=exc)
 
