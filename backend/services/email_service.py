@@ -93,9 +93,9 @@ def send_email(to: str, subject: str, body_html: str, attachments: list = None) 
 
         # Connect and send.
         with smtplib.SMTP(server, port) as smtp_conn:
-            if use_tls:
+            if use_tls and smtp_conn.has_extn('starttls'):
                 smtp_conn.starttls()
-            if username:
+            if username and smtp_conn.has_extn('auth'):
                 smtp_conn.login(username, password)
             smtp_conn.sendmail(sender, [to], message.as_string())
 
