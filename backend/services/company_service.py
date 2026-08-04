@@ -123,7 +123,7 @@ class CompanyService:
             openings=payload.get('openings', 1),
             deadline=deadline_val,
             description=payload.get('description'),
-            status='open'
+            status='pending'
         )
 
         db.session.add(drive)
@@ -150,7 +150,7 @@ class CompanyService:
             drive.deadline = validate_date_format(payload['deadline'], 'Deadline')
 
         if 'status' in payload:
-            drive.status = validate_status_choice(payload['status'], ['pending', 'open', 'closed'])
+            drive.status = validate_status_choice(payload['status'], ['pending', 'closed'])
 
         db.session.commit()
         return drive.to_dict()

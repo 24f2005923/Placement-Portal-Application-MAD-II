@@ -6,9 +6,19 @@
         <h3 class="section-heading mb-1">Application History & Status Tracking</h3>
         <p class="text-muted mb-0">View all submitted placement applications, interview schedules, feedback, and downloadable documents.</p>
       </div>
-      <router-link to="/student/drives" class="btn btn-primary rounded-pill px-4">
-        <i class="bi bi-briefcase me-2"></i>Browse Drives
-      </router-link>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <button
+          class="btn btn-outline-primary rounded-pill px-3"
+          :disabled="exporting"
+          @click="handleExportApplications"
+        >
+          <span v-if="exporting" class="spinner-border spinner-border-sm me-1"></span>
+          <i v-else class="bi bi-download me-1"></i>{{ exporting ? exportStatus : 'Export CSV' }}
+        </button>
+        <router-link to="/student/drives" class="btn btn-primary rounded-pill px-4">
+          <i class="bi bi-briefcase me-2"></i>Browse Drives
+        </router-link>
+      </div>
     </div>
 
     <!-- Feedback Alerts -->

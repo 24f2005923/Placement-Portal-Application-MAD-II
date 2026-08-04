@@ -125,7 +125,7 @@ async function handleSubmit() {
   success.value = ''
   try {
     await companyAPI.createDrive(form.value)
-    success.value = 'Placement drive created successfully!'
+    success.value = 'Placement drive submitted! It is pending admin approval before students can view it.'
     form.value = { job_role: '', package: '', openings: 1, deadline: '', eligibility: '', description: '' }
     await fetchDrives()
     setTimeout(() => { success.value = '' }, 4000)

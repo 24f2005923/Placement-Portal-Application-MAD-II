@@ -14,7 +14,6 @@
         <label class="form-label">Status</label>
         <select v-model="form.status" class="form-select">
           <option value="pending">Pending</option>
-          <option value="open">Open</option>
           <option value="closed">Closed</option>
         </select>
       </div>

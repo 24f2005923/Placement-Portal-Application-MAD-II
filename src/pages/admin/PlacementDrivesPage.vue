@@ -30,8 +30,8 @@ async function fetchDrives() {
 
 async function approveDrive(drive) {
   try {
-    const { data } = await adminAPI.approveDrive(drive.id)
-    drive.status = data.drive.status
+    await adminAPI.approveDrive(drive.id)
+    drive.status = 'open'
     showSuccess(`Drive for ${drive.company_name} approved.`)
   } catch (err) {
     showError(err.response?.data?.error || 'Failed to approve drive.')
