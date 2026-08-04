@@ -6,7 +6,7 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 from exceptions import Forbidden, ValidationError, NotFound, Conflict
-from utils.validators import validate_phone, validate_email, validate_password, check_required_fields
+from utils.validators import validate_phone, validate_email, check_required_fields
 
 logger = logging.getLogger('auth_service')
 if not logger.handlers:
@@ -123,11 +123,11 @@ class AuthService:
     @classmethod
     def register_student(cls, payload):
         """Validates payload and registers a new student user and profile."""
-        req = ['name', 'email', 'password', 'register_number', 'department', 'year']
+        req = ['name', 'email', 'password', 'register_number', 'department']
         check_required_fields(payload, req)
 
         target_email = validate_email(payload['email'])
-        validated_pwd = validate_password(payload['password'])
+        validated_pwd = payload['password']
 
         email_exists = db.session.query(User).filter(User.email == target_email).first()
         if email_exists:
@@ -144,6 +144,16 @@ class AuthService:
         db.session.add(user)
         db.session.flush()
 
+        # Parse CGPA safely
+        cgpa_val = payload.get('cgpa')
+        if cgpa_val is None or str(cgpa_val).strip() == "":
+            cgpa_float = 0.0
+        else:
+            try:
+                cgpa_float = float(cgpa_val)
+            except ValueError:
+                raise ValidationError("CGPA must be a valid number")
+
         # Build student profile
         student = Student(
             user_id=user.id,
@@ -151,7 +161,7 @@ class AuthService:
             department=payload['department'],
             year=payload.get('year', 4),
             phone=payload.get('phone'),
-            cgpa=payload.get('cgpa', 0.0)
+            cgpa=cgpa_float
         )
 
         skills = payload.get('skills')
@@ -166,12 +176,17 @@ class AuthService:
     @classmethod
     def register_company(cls, payload):
         """Validates payload and registers a new company user and profile."""
-        req = ['company_name', 'email', 'password', 'industry', 'city', 'contact_email']
+        req = ['company_name', 'email', 'password']
         check_required_fields(payload, req)
 
         target_email = validate_email(payload['email'])
-        clean_phone = validate_phone(payload['phone'], field_name="Phone number")
-        validated_pwd = validate_password(payload['password'])
+        
+        phone_val = payload.get('phone', '')
+        clean_phone = None
+        if phone_val and str(phone_val).strip():
+            clean_phone = validate_phone(phone_val, field_name="Phone number")
+
+        validated_pwd = payload['password']
 
         email_exists = db.session.query(User).filter(User.email == target_email).first()
         if email_exists:
@@ -186,7 +201,7 @@ class AuthService:
             user_id=user.id,
             company_name=payload['company_name'],
             industry=payload.get('industry'),
-            contact_email=payload.get('contact_email', target_email),
+            contact_email=payload.get('contact_email') or target_email,
             contact_phone=clean_phone,
             address=payload.get('address'),
             city=payload.get('city'),
