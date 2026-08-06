@@ -15,8 +15,6 @@ from models.result import Result
 from models.reminder_history import ReminderHistory
 from models.interview_reminder_history import InterviewReminderHistory
 
-# Blueprint imports are deferred inside create_app() so that import
-# failures produce a clear ImportError (not a NameError at registration).
 
 from database.seed import seed_admin
 
@@ -25,7 +23,6 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # ── Create required directories ───────────────────────────────
     os.makedirs(app.config['UPLOAD_FOLDER'],  exist_ok=True)
     os.makedirs(app.config['EXPORTS_FOLDER'], exist_ok=True)
     os.makedirs(app.config['REPORTS_FOLDER'], exist_ok=True)
@@ -34,15 +31,12 @@ def create_app():
     db_dir = os.path.dirname(app.config['DB_FILE'])
     os.makedirs(db_dir, exist_ok=True)
 
-    # ── CORS ──────────────────────────────────────────────────────
     CORS(app, resources={r'/api/*': {'origins': app.config['CORS_ORIGINS']}},
          supports_credentials=True)
 
-    # ── Initialize extensions ─────────────────────────────────────
     db.init_app(app)
     JWTManager(app)
 
-    # ── Register blueprints (all API routes) ──────────────────────
     from routes.auth import auth_bp
     from routes.admin import admin_bp
     from routes.company import company_bp
@@ -57,7 +51,6 @@ def create_app():
     app.register_blueprint(export_bp)
     app.register_blueprint(report_bp)
 
-    # ── Error handlers ────────────────────────────────────────────
     from exceptions import PlacementError
 
     @app.errorhandler(PlacementError)
@@ -77,7 +70,6 @@ def create_app():
         db.session.rollback()
         return jsonify({'error': 'Internal server error'}), 500
 
-    # ── Health check ──────────────────────────────────────────────
     @app.route('/api/health', methods=['GET'])
     def health_check():
         from cache import cache
@@ -87,7 +79,6 @@ def create_app():
             'redis_cache': 'connected' if cache.is_available else 'unavailable (caching disabled)',
         }), 200
 
-    # ── Create tables and seed admin user ─────────────────────────
     with app.app_context():
         db.create_all()
         try:

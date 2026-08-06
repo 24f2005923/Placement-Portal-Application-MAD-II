@@ -1,16 +1,3 @@
-"""
-redis_cache.py — Low-level Redis cache helper
-─────────────────────────────────────────────
-Provides a simple get / set / delete interface on top of the Redis
-client.  All values are stored as JSON strings so any Python dict or
-list can be cached directly.
-
-Design notes:
-  • If Redis is not running, every operation is silently skipped so
-    the application continues to work (just without caching).
-  • The TTL (time-to-live) controls how long a cached value lives
-    before Redis automatically removes it.
-"""
 
 import json
 import logging
@@ -27,10 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class RedisCache:
-    """Thin wrapper around redis.Redis for JSON-serialised caching."""
 
     def __init__(self):
-        # Check if the python redis package is installed.
         if not HAS_REDIS:
             self._client = None
             self._available = False
@@ -40,7 +25,6 @@ class RedisCache:
             )
             return
 
-        # Read the Redis URL from the environment (or fall back to localhost).
         redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
         try:
             self._client = redis.Redis.from_url(

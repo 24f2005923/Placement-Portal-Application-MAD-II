@@ -1,14 +1,5 @@
-"""
-student_updater.py — Shared student profile field update helper
-─────────────────────────────────────────────────────────────────
-Both AdminService.update_student() and StudentService.update_profile()
-need to update the same set of student model fields from a request payload.
-This module provides a single, reusable function so that list is never
-duplicated and any future field additions only need one change.
-"""
 
-# These are the student model fields that are safe to update from user input.
-# 'name' and 'email' are on the related User model and handled separately.
+# Student model fields safe to update from user input.
 STUDENT_PROFILE_FIELDS = [
     'department',
     'year',
@@ -39,18 +30,15 @@ def apply_student_profile_fields(student, payload):
         student: The Student model instance to update.
         payload:  A dict containing the new field values (from the API request).
     """
-    # Update user-level fields (name and email live on the related User model)
     if student.user:
         if 'name' in payload:
             student.user.name = payload['name']
         if 'email' in payload:
             student.user.email = str(payload['email']).lower().strip()
 
-    # Update student model fields from the shared field list
     for field_name in STUDENT_PROFILE_FIELDS:
         if field_name in payload:
             setattr(student, field_name, payload[field_name])
 
-    # Skills are stored as a JSON string — use the model's helper method
     if 'skills' in payload:
         student.save_skills(payload['skills'])

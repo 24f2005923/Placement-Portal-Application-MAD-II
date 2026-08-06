@@ -1,28 +1,3 @@
-"""
-sms_service.py — Pluggable SMS provider abstraction
-─────────────────────────────────────────────────────
-Defines an abstract SMS provider interface so the rest of the
-application can send SMS messages without knowing which provider
-is being used.
-
-Available providers:
-  • ConsoleSMSProvider  (default) — prints messages to logs.
-                                     No API key or account needed.
-                                     Perfect for development.
-  • TwilioSMSProvider             — sends real SMS via Twilio REST API.
-                                     Requires TWILIO_* env vars.
-
-Configuration (set in .env):
-  SMS_PROVIDER=console   (or "twilio")
-  TWILIO_ACCOUNT_SID=...
-  TWILIO_AUTH_TOKEN=...
-  TWILIO_FROM_NUMBER=+1XXXXXXXXXX
-
-Usage in tasks:
-  from services.sms_service import get_sms_provider
-  sms = get_sms_provider()
-  sms.send(to='+919876543210', message='Your interview is tomorrow!')
-"""
 
 import logging
 from abc import ABC, abstractmethod
@@ -30,8 +5,6 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-
-# ── Abstract base ─────────────────────────────────────────────────
 
 class SMSProvider(ABC):
     """
@@ -56,8 +29,6 @@ class SMSProvider(ABC):
         raise NotImplementedError
 
 
-# ── Console provider (development default) ────────────────────────
-
 class ConsoleSMSProvider(SMSProvider):
     """
     Development SMS provider that logs messages to the console.
@@ -75,8 +46,6 @@ class ConsoleSMSProvider(SMSProvider):
         )
         return True
 
-
-# ── Twilio provider ───────────────────────────────────────────────
 
 class TwilioSMSProvider(SMSProvider):
     """
@@ -100,8 +69,6 @@ class TwilioSMSProvider(SMSProvider):
             return False
 
         try:
-            # Import Twilio only when actually needed so the application
-            # doesn't fail on startup if twilio is not installed.
             from twilio.rest import Client
             client = Client(account_sid, auth_token)
             msg = client.messages.create(
@@ -121,8 +88,6 @@ class TwilioSMSProvider(SMSProvider):
             logger.error('Twilio SMS failed to %s: %s', to, exc)
             return False
 
-
-# ── Factory function ──────────────────────────────────────────────
 
 def get_sms_provider() -> SMSProvider:
     """

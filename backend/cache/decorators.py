@@ -6,9 +6,7 @@ from flask import request, Response
 logger = logging.getLogger(__name__)
 
 def cache_response(key_fn, ttl=300):
-    """
-    Flask route decorator that caches the response as JSON using Redis.
-    """
+
     def decorator(view_func):
         @functools.wraps(view_func)
         def wrapper(*args, **kwargs):
@@ -43,13 +41,13 @@ def cache_response(key_fn, ttl=300):
     return decorator
 
 def page_key():
-    """Returns the page query string argument."""
+    
     return request.args.get('page', '1')
 
 def search_key():
-    """Returns the cleaned search query string argument."""
+
     return request.args.get('search', '').strip().lower()
 
 def status_key():
-    """Returns the status query string argument."""
+
     return request.args.get('status', '').strip().lower()

@@ -1,8 +1,3 @@
-"""
-announcements.py — General mass email tasks
-─────────────────────────────────────────────
-Contains Celery tasks for sending announcements to all students.
-"""
 
 import logging
 from celery_app import celery

@@ -1,19 +1,3 @@
-"""
-gchat_service.py — Google Chat webhook notification helper
-───────────────────────────────────────────────────────────
-Sends plain-text or card messages to a Google Chat space via an
-incoming webhook URL.
-
-Configuration (set in .env):
-  GCHAT_WEBHOOK_URL — Full webhook URL from your Google Chat space.
-                      Leave blank to disable Google Chat notifications.
-
-To get a webhook URL:
-  1. Open Google Chat → your space → Manage webhooks
-  2. Click "Add webhook", give it a name
-  3. Copy the generated URL into your .env file
-"""
-
 import json
 import logging
 import urllib.request
@@ -36,10 +20,9 @@ def send_gchat_message(text: str) -> bool:
     """
     webhook_url = current_app.config.get('GCHAT_WEBHOOK_URL', '').strip()
 
-    # ── Webhook not configured — skip silently ────────────────────
     if not webhook_url:
         logger.debug('Google Chat webhook not configured — skipping message.')
-        return True   # not a failure, just not enabled
+        return True
 
     payload = json.dumps({'text': text}).encode('utf-8')
 
@@ -90,7 +73,6 @@ def send_gchat_card(title: str, subtitle: str, body_text: str) -> bool:
         logger.debug('Google Chat webhook not configured — skipping card.')
         return True
 
-    # Google Chat card v1 format
     card_payload = {
         'cards': [{
             'header': {

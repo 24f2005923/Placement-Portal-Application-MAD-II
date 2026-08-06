@@ -1,21 +1,3 @@
-"""
-interview_reminders.py — Daily interview reminder Celery task
-──────────────────────────────────────────────────────────────
-This module defines a scheduled Celery task that runs every day
-at 08:00 UTC.  It finds all students who have an interview
-scheduled within the next 24–48 hours and sends them:
-
-  1. An email reminder
-  2. A Google Chat notification (if GCHAT_WEBHOOK_URL is configured)
-  3. An SMS reminder (via the configured SMS provider)
-
-The Beat schedule is defined in celery_app.py.
-
-Retry policy:
-  • Retries up to 3 times with a 5-minute delay between attempts.
-  • If all retries fail the task is marked FAILURE in the result backend.
-"""
-
 import logging
 from datetime import date, timedelta
 
@@ -38,7 +20,7 @@ logger = logging.getLogger(__name__)
     name='tasks.interview_reminders.send_interview_reminders',
     bind=True,
     max_retries=3,
-    default_retry_delay=300,   # retry after 5 minutes
+    default_retry_delay=300,
 )
 def send_interview_reminders(self):
     """
@@ -57,8 +39,6 @@ def send_interview_reminders(self):
         today    = date.today()
         tomorrow = today + timedelta(days=1)
 
-        # Find all interviews scheduled for today or tomorrow
-        # that are still in the 'interview' stage (not yet concluded).
         upcoming_interviews = (
             db.session.query(Interview)
             .join(Application, Interview.application_id == Application.id)
@@ -81,7 +61,6 @@ def send_interview_reminders(self):
         sms_provider = get_sms_provider()
 
         for interview in upcoming_interviews:
-            # Load the associated student through the application relationship.
             application = interview.application
             if application is None:
                 continue
@@ -94,11 +73,6 @@ def send_interview_reminders(self):
             if user is None:
                 continue
 
-            # ── Idempotency guard ─────────────────────────────────
-            # Check whether a reminder has already been dispatched for
-            # this specific interview. If so, skip it entirely to avoid
-            # spamming the student even if the Beat task fires multiple
-            # times on the same day.
             already_notified = (
                 db.session.query(InterviewReminderHistory)
                 .filter(
@@ -114,15 +88,12 @@ def send_interview_reminders(self):
                 )
                 continue
 
-            # Build human-readable interview details.
             interview_info = _build_interview_info(interview, application)
 
-            # ── 1. Email reminder ─────────────────────────────────
             email_subject = f"Interview Reminder: {interview_info['company']} — {interview_info['interview_date']}"
             email_body    = EmailTemplateBuilder.build_interview_reminder_from_info(user.name, interview_info)
             send_email(to=user.email, subject=email_subject, body_html=email_body)
 
-            # ── 2. Google Chat notification ───────────────────────
             gchat_text = (
                 f"🗓️ *Interview Reminder* — {user.name}\n"
                 f"Company: {interview_info['company']}\n"
@@ -132,7 +103,6 @@ def send_interview_reminders(self):
             )
             send_gchat_message(gchat_text)
 
-            # ── 3. SMS reminder ───────────────────────────────────
             if student.phone:
                 sms_body = (
                     f"Hi {user.name}, your interview with {interview_info['company']} "
@@ -141,9 +111,6 @@ def send_interview_reminders(self):
                 )
                 sms_provider.send(to=student.phone, message=sms_body)
 
-            # ── Record to history (idempotency write) ─────────────
-            # Use try/except to gracefully handle the rare race condition
-            # where two workers dispatch simultaneously for the same record.
             try:
                 history_entry = InterviewReminderHistory(
                     student_id=student.id,
@@ -174,7 +141,6 @@ def send_interview_reminders(self):
     except Exception as exc:
         logger.error('Interview reminder task failed: %s', exc, exc_info=True)
         db.session.rollback()
-        # Retry automatically up to max_retries times.
         raise self.retry(exc=exc)
 
 

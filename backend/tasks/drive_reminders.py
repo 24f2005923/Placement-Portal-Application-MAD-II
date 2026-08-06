@@ -1,19 +1,3 @@
-"""
-drive_reminders.py — Daily placement drive deadline reminder Celery task
-──────────────────────────────────────────────────────────────────────
-This module defines a scheduled Celery task that runs every day
-to identify open placement drives whose application deadline is within
-the next 48 hours.
-
-It determines eligible students (active students who have NOT already
-applied) and sends them an email reminder.
-
-To prevent duplicate emails, it logs each dispatched reminder into
-the ReminderHistory table.
-
-Retry policy:
-  • Retries up to 3 times with a 5-minute delay between attempts.
-"""
 
 import logging
 from datetime import date, timedelta
@@ -72,9 +56,6 @@ def send_drive_deadline_reminders(self):
         reminders_sent = 0
 
         for drive in upcoming_drives:
-            # Gather all active students
-            # Based on existing codebase logic, we'll fetch all students whose users are approved/active.
-            # Then filter out those who have applied.
             from models.user import User
             
             all_students = (
@@ -92,7 +73,7 @@ def send_drive_deadline_reminders(self):
                 ).first() is not None
 
                 if has_applied:
-                    continue  # Already applied
+                    continue
 
                 # Check if reminder was already sent
                 already_reminded = db.session.query(ReminderHistory).filter(
@@ -101,9 +82,8 @@ def send_drive_deadline_reminders(self):
                 ).first() is not None
 
                 if already_reminded:
-                    continue  # Already sent
+                    continue
 
-                # Build the email using the centralized template builder
                 company_name = drive.company.company_name if drive.company else 'Unknown Company'
                 deadline_str = drive.deadline.strftime('%d %B %Y') if drive.deadline else 'TBD'
                 subject = f"Deadline Approaching: Apply for {company_name} — {drive.job_role}"
@@ -117,7 +97,6 @@ def send_drive_deadline_reminders(self):
                 
                 email_sent = send_email(to=student.user.email, subject=subject, body_html=body)
                 
-                # Record in history if sent (or if simulated in console mode)
                 if email_sent:
                     history_record = ReminderHistory(student_id=student.id, drive_id=drive.id)
                     db.session.add(history_record)

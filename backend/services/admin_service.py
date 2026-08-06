@@ -138,7 +138,6 @@ class AdminService:
     def update_student(student_id, payload):
         """Update admin-editable fields on a student record."""
         student = BaseRepository.get_by_id_or_404(Student, student_id, 'Student not found')
-        # Delegate to the shared field-update helper so the field list stays in one place
         apply_student_profile_fields(student, payload)
         db.session.commit()
         return student.to_dict()
@@ -256,7 +255,6 @@ class AdminService:
         app = BaseRepository.get_by_id_or_404(Application, application_id, 'Application not found')
 
         app.application_status = clean_status
-        # Sync the student's overall placement stage using the shared helper
         sync_student_placement_status(app.student, clean_status)
 
         db.session.commit()
@@ -272,14 +270,12 @@ class AdminService:
         """
         from sqlalchemy import func
 
-        # ── Student metrics ────────────────────────────────────────────
         total_students = db.session.query(func.count(Student.id)).scalar() or 0
         placed_count   = db.session.query(func.count(Student.id)).filter(
             Student.placement_status == 'Placed'
         ).scalar() or 0
         placement_rate = round((placed_count / total_students) * 100, 1) if total_students else 0.0
 
-        # ── Drive metrics ──────────────────────────────────────────────
         total_drives  = db.session.query(func.count(PlacementDrive.id)).scalar() or 0
         open_drives   = db.session.query(func.count(PlacementDrive.id)).filter(
             PlacementDrive.status == 'open'
@@ -288,7 +284,6 @@ class AdminService:
             PlacementDrive.status == 'closed'
         ).scalar() or 0
 
-        # ── Application funnel metrics ─────────────────────────────────
         total_apps = db.session.query(func.count(Application.id)).scalar() or 0
 
         shortlisted = db.session.query(func.count(Application.id)).filter(
@@ -311,7 +306,6 @@ class AdminService:
         selection_rate  = round((selected    / total_apps) * 100, 1) if total_apps else 0.0
         interview_rate  = round((in_interview / total_apps) * 100, 1) if total_apps else 0.0
 
-        # ── Department-wise placement breakdown ────────────────────────
         dept_rows = (
             db.session.query(Student.department, func.count(Student.id).label('count'))
             .filter(Student.department.isnot(None), Student.department != '')
@@ -444,7 +438,6 @@ class AdminService:
         """
         from sqlalchemy import func
 
-        # Single query: join Company → PlacementDrive → Application
         rows = (
             db.session.query(
                 Company.id,

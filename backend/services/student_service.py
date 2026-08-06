@@ -45,7 +45,6 @@ class StudentService:
     def update_profile(cls, user_id, payload):
         """Update a student's own profile from their request payload."""
         student = cls.get_student_by_user(user_id)
-        # Delegate field updates to the shared helper — field list lives in student_updater.py
         apply_student_profile_fields(student, payload)
         db.session.commit()
         return student.to_dict()

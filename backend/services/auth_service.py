@@ -57,16 +57,13 @@ class AuthService:
         lower_identifier = clean_identifier.lower()
         logger.info(f"Attempting login for identifier: {clean_identifier}")
 
-        # Strategy 1: Lookup by Email (case-insensitive exact)
         matched_user = db.session.query(User).filter(func.lower(User.email) == lower_identifier).first()
 
-        # Strategy 2: Fallback lookup by Student register_number (case-insensitive exact)
         if not matched_user:
             student_record = db.session.query(Student).filter(func.lower(Student.register_number) == lower_identifier).first()
             if student_record and student_record.user:
                 matched_user = student_record.user
 
-        # Strategy 3: Fallback lookup by User name (case-insensitive exact)
         if not matched_user:
             name_matched_user = db.session.query(User).filter(func.lower(User.name) == lower_identifier).first()
             if name_matched_user:
@@ -76,22 +73,18 @@ class AuthService:
             logger.warning(f"No account matching identifier: {clean_identifier}")
             raise ValidationError("Invalid credentials")
 
-        # Password verification
         if not matched_user.check_password(password):
             logger.warning(f"Incorrect password for User ID: {matched_user.id}")
             raise ValidationError("Invalid credentials")
 
-        # Account active status check
         if matched_user.status == 'inactive':
             logger.warning(f"Account is deactivated for User ID: {matched_user.id}")
             raise Forbidden("Your account is deactivated. Please contact admin.")
 
-        # Role mismatch check if a specific role was requested
         if requested_role and matched_user.role != requested_role:
             logger.warning(f"Role mismatch for User ID: {matched_user.id}. Expected {requested_role}, got {matched_user.role}")
             raise Forbidden(f"Access denied: This account is registered as a {matched_user.role.capitalize()}.")
 
-        # Company specific validation
         if matched_user.role == 'company':
             associated_company = db.session.query(Company).filter(Company.user_id == matched_user.id).first()
             if associated_company:
@@ -138,13 +131,11 @@ class AuthService:
         if reg_exists:
             raise Conflict('This register number already exists')
 
-        # Build user
         user = User(name=payload['name'], email=target_email, role='student')
         user.set_password(validated_pwd)
         db.session.add(user)
         db.session.flush()
 
-        # Parse CGPA safely
         cgpa_val = payload.get('cgpa')
         if cgpa_val is None or str(cgpa_val).strip() == "":
             cgpa_float = 0.0
@@ -154,7 +145,6 @@ class AuthService:
             except ValueError:
                 raise ValidationError("CGPA must be a valid number")
 
-        # Build student profile
         student = Student(
             user_id=user.id,
             register_number=reg_number,

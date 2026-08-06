@@ -69,6 +69,7 @@ class Application(db.Model, DictMixin):
             dict_out['drive_title'] = linked_drive.title
             dict_out['drive_role'] = linked_drive.job_role
             dict_out['drive_package'] = linked_drive.package
+            dict_out['drive_eligibility'] = linked_drive.eligibility
             
             linked_company = linked_drive.company
             dict_out['company_name'] = linked_company.company_name if linked_company else ''

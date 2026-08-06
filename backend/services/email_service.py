@@ -1,21 +1,3 @@
-"""
-email_service.py — Email notification helper
-─────────────────────────────────────────────
-Sends HTML emails via SMTP using Python's built-in smtplib.
-
-Configuration (set in .env):
-  MAIL_SERVER   — SMTP server hostname  (default: smtp.gmail.com)
-  MAIL_PORT     — SMTP port             (default: 587)
-  MAIL_USE_TLS  — Enable STARTTLS       (default: true)
-  MAIL_USERNAME — Sender account email  (leave blank for console mode)
-  MAIL_PASSWORD — Sender account password / app-password
-  MAIL_SENDER   — From address shown to recipients
-
-Console mode:
-  If MAIL_USERNAME is not configured the email body is printed to
-  the console/logs instead of being sent.  This is useful during
-  development so no SMTP server is needed.
-"""
 
 import logging
 import smtplib
@@ -45,7 +27,6 @@ def send_email(to: str, subject: str, body_html: str, attachments: list = None) 
     """
     server   = current_app.config.get('MAIL_SERVER', '')
 
-    # ── Console mode — explicitly set to console or empty ─────────
     if not server or server.lower() == 'console':
         logger.info(
             '[EMAIL — CONSOLE MODE]\n'
@@ -54,9 +35,8 @@ def send_email(to: str, subject: str, body_html: str, attachments: list = None) 
             '  Body (HTML stripped):\n%s',
             to, subject, _strip_html(body_html)
         )
-        return True   # treat as success so tasks don't retry unnecessarily
+        return True
 
-    # ── Real SMTP send ────────────────────────────────────────────
     try:
         port     = current_app.config['MAIL_PORT']
         use_tls  = current_app.config['MAIL_USE_TLS']
@@ -64,7 +44,6 @@ def send_email(to: str, subject: str, body_html: str, attachments: list = None) 
         password = current_app.config.get('MAIL_PASSWORD', '')
         sender   = current_app.config['MAIL_SENDER']
 
-        # Build the MIME message.
         message = MIMEMultipart('mixed')
         message['Subject'] = subject
         message['From']    = sender
@@ -91,7 +70,6 @@ def send_email(to: str, subject: str, body_html: str, attachments: list = None) 
             )
             message.attach(part)
 
-        # Connect and send.
         with smtplib.SMTP(server, port) as smtp_conn:
             if use_tls and smtp_conn.has_extn('starttls'):
                 smtp_conn.starttls()
@@ -134,8 +112,6 @@ def send_bulk_emails(recipients: list, subject: str, body_html: str) -> dict:
     logger.info('Bulk email done: %d sent, %d failed', sent_count, failed_count)
     return {'sent': sent_count, 'failed': failed_count}
 
-
-# ── Internal helpers ──────────────────────────────────────────────
 
 def _strip_html(html: str) -> str:
     """Very simple HTML tag remover for readable console output."""

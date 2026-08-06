@@ -39,7 +39,7 @@ if __name__ == '__main__':
     print('  - Monthly placement report: 1st of every month at 06:00 UTC')
     print('Press Ctrl+C to stop.\n')
 
-    celery.worker_main(argv=[
+    celery.start(argv=[
         'beat',
         '--loglevel=info',
         '--scheduler=celery.beat:PersistentScheduler',

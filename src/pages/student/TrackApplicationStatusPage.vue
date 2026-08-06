@@ -105,6 +105,7 @@
         <thead class="table-light">
           <tr>
             <th>Company & Job Role</th>
+            <th>Eligibility Criteria</th>
             <th>Applied Date</th>
             <th>Status & Stage</th>
             <th>Interview Details & Feedback</th>
@@ -118,6 +119,13 @@
               <div class="fw-bold text-primary fs-6">{{ app.company_name }}</div>
               <div class="fw-medium text-dark">{{ app.drive_title || app.drive_role }}</div>
               <small class="text-muted d-block">{{ app.drive_role }} • <span class="text-success fw-semibold">{{ app.drive_package || 'N/A' }}</span></small>
+            </td>
+
+            <!-- Eligibility Criteria -->
+            <td>
+              <span class="text-dark small text-wrap d-inline-block" style="max-width: 200px;">
+                {{ app.drive_eligibility || 'N/A' }}
+              </span>
             </td>
 
             <!-- Applied Date -->
