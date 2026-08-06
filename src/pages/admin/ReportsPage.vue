@@ -33,7 +33,7 @@
               <button class="btn btn-primary" @click="generateReport" :disabled="busy">
                 <span v-if="generating" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-filetype-csv me-2"></i>
-                {{ generating ? 'Generating...' : 'Generate CSV Report' }}
+                {{ generating ? 'Generating...' : 'Generate Report' }}
               </button>
             </div>
           </div>
@@ -81,7 +81,7 @@
               <button class="btn btn-outline-primary" @click="downloadCsv" :disabled="!generatedFile || downloading">
                 <span v-if="downloading" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="bi bi-download me-2"></i>
-                Download CSV
+                Download
               </button>
             </div>
           </SectionCard>

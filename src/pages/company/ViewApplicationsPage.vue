@@ -135,7 +135,7 @@ onMounted(() => {
         <button class="btn btn-outline-primary rounded-pill px-4" @click="exportApplications" :disabled="exporting">
           <span v-if="exporting" class="spinner-border spinner-border-sm me-2"></span>
           <i v-else class="bi bi-filetype-csv me-2"></i>
-          {{ exporting ? exportStatus : 'Export Applications (CSV)' }}
+          {{ exporting ? exportStatus : 'Export Applications' }}
         </button>
       </div>
     </div>
