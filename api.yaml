@@ -1,0 +1,1381 @@
+openapi: 3.0.3
+info:
+  title: Placement Portal API
+  description: API documentation for the University Placement Portal application.
+  version: 1.0.0
+servers:
+  - url: /
+paths:
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: Health Check
+      description: Returns the status of the API and external dependencies (like Redis).
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  message:
+                    type: string
+                    example: Placement Portal API is running
+                  redis_cache:
+                    type: string
+                    example: connected
+
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: User Login
+      description: Authenticates a user by email, register number, or username.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                email:
+                  type: string
+                register_no:
+                  type: string
+                register_number:
+                  type: string
+                identifier:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, student, company]
+      responses:
+        '200':
+          description: Successful authentication.
+        '400':
+          description: Validation error.
+
+  /api/auth/register/student:
+    post:
+      tags:
+        - Auth
+      summary: Register Student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+                - register_number
+                - department
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                register_number:
+                  type: string
+                department:
+                  type: string
+                cgpa:
+                  type: number
+                phone:
+                  type: string
+                skills:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Student successfully registered.
+        '400':
+          description: Validation error.
+        '409':
+          description: Email or register number conflict.
+
+  /api/auth/register/company:
+    post:
+      tags:
+        - Auth
+      summary: Register Company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - company_name
+                - email
+                - password
+              properties:
+                company_name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                phone:
+                  type: string
+                industry:
+                  type: string
+                contact_email:
+                  type: string
+                contact_phone:
+                  type: string
+                address:
+                  type: string
+                city:
+                  type: string
+      responses:
+        '201':
+          description: Company registered, waiting for admin approval.
+        '400':
+          description: Validation error.
+
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh Access Token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token refreshed.
+
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Current User Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile details.
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Log Out
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully.
+
+  /api/admin/stats:
+    get:
+      tags:
+        - Admin
+      summary: Dashboard Stats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Stats list.
+
+  /api/admin/activities:
+    get:
+      tags:
+        - Admin
+      summary: Recent Activities Log
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Activity logs list.
+
+  /api/admin/applications:
+    get:
+      tags:
+        - Admin
+      summary: Get All Applications
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated application list.
+
+  /api/admin/applications/{app_id}/status:
+    put:
+      tags:
+        - Admin
+      summary: Update Application Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Application status updated.
+
+  /api/admin/students:
+    get:
+      tags:
+        - Admin
+      summary: Get All Students
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated student list.
+
+  /api/admin/students/{student_id}:
+    get:
+      tags:
+        - Admin
+      summary: Student Detail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Student profile details.
+    put:
+      tags:
+        - Admin
+      summary: Update Student Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Student updated.
+
+  /api/admin/students/{student_id}/status:
+    put:
+      tags:
+        - Admin
+      summary: Change Student Account Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Status updated.
+
+  /api/admin/companies:
+    get:
+      tags:
+        - Admin
+      summary: Get All Companies
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated company list.
+
+  /api/admin/companies/{company_id}:
+    get:
+      tags:
+        - Admin
+      summary: Company Detail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Company profile details.
+
+  /api/admin/companies/{company_id}/approve:
+    put:
+      tags:
+        - Admin
+      summary: Approve Company
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Company approved.
+
+  /api/admin/companies/{company_id}/reject:
+    put:
+      tags:
+        - Admin
+      summary: Reject Company
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Company rejected.
+
+  /api/admin/companies/{company_id}/blacklist:
+    put:
+      tags:
+        - Admin
+      summary: Blacklist/Unblacklist Company
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blacklisted:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Blacklist status updated.
+
+  /api/admin/drives:
+    get:
+      tags:
+        - Admin
+      summary: Get All Drives
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated placement drive list.
+
+  /api/admin/drives/{drive_id}:
+    get:
+      tags:
+        - Admin
+      summary: Drive Detail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive details.
+
+  /api/admin/drives/{drive_id}/approve:
+    put:
+      tags:
+        - Admin
+      summary: Approve Placement Drive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive approved and set to open.
+
+  /api/admin/drives/{drive_id}/reject:
+    put:
+      tags:
+        - Admin
+      summary: Reject Placement Drive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive rejected.
+
+  /api/admin/drives/{drive_id}/close:
+    put:
+      tags:
+        - Admin
+      summary: Close Placement Drive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive closed.
+
+  /api/admin/drives/{drive_id}/status:
+    put:
+      tags:
+        - Admin
+      summary: Change Drive Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Status changed.
+
+  /api/admin/resumes/{filename}:
+    get:
+      tags:
+        - Admin
+      summary: Download Candidate Resume
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resume file download.
+
+  /api/company/stats:
+    get:
+      tags:
+        - Company
+      summary: Company Stats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Stats summary list.
+
+  /api/company/profile:
+    get:
+      tags:
+        - Company
+      summary: Get Company Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile detail.
+    put:
+      tags:
+        - Company
+      summary: Update Company Profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Profile updated.
+
+  /api/company/drives:
+    get:
+      tags:
+        - Company
+      summary: List Company Drives
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Drives list.
+    post:
+      tags:
+        - Company
+      summary: Create Placement Drive
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - job_role
+              properties:
+                title:
+                  type: string
+                job_role:
+                  type: string
+                package:
+                  type: string
+                eligibility:
+                  type: string
+                openings:
+                  type: integer
+                deadline:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Drive created successfully.
+
+  /api/company/drives/{drive_id}:
+    get:
+      tags:
+        - Company
+      summary: Get Single Drive details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive details.
+    put:
+      tags:
+        - Company
+      summary: Update Drive Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Drive updated.
+    delete:
+      tags:
+        - Company
+      summary: Delete Placement Drive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive deleted.
+
+  /api/company/drives/{drive_id}/close:
+    put:
+      tags:
+        - Company
+      summary: Close Drive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive closed.
+
+  /api/company/applications:
+    get:
+      tags:
+        - Company
+      summary: List Received Applications
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: drive_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of applications.
+
+  /api/company/applications/export:
+    post:
+      tags:
+        - Company
+      summary: Export Drive Applications to CSV
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - drive_id
+              properties:
+                drive_id:
+                  type: integer
+      responses:
+        '200':
+          description: Export queued.
+
+  /api/company/applications/export/status/{task_id}:
+    get:
+      tags:
+        - Company
+      summary: Check Application Export Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status detail.
+
+  /api/company/applications/export/download/{filename}:
+    get:
+      tags:
+        - Company
+      summary: Download Application CSV Export
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file download.
+
+  /api/company/applications/{app_id}/shortlist:
+    put:
+      tags:
+        - Company
+      summary: Shortlist Student Application
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Student shortlisted.
+
+  /api/company/applications/{app_id}/reject:
+    put:
+      tags:
+        - Company
+      summary: Reject Student Application
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Application rejected.
+
+  /api/company/applications/{app_id}/status:
+    put:
+      tags:
+        - Company
+      summary: Update Application Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Status updated.
+
+  /api/company/interviews:
+    get:
+      tags:
+        - Company
+      summary: List Scheduled Interviews
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Scheduled interviews.
+    post:
+      tags:
+        - Company
+      summary: Schedule Student Interview
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - application_id
+              properties:
+                application_id:
+                  type: integer
+                interview_date:
+                  type: string
+                interview_time:
+                  type: string
+                interview_mode:
+                  type: string
+                interview_link:
+                  type: string
+                round_name:
+                  type: string
+                remarks:
+                  type: string
+      responses:
+        '201':
+          description: Interview scheduled successfully.
+
+  /api/company/interviews/{interview_id}/email:
+    post:
+      tags:
+        - Company
+      summary: Send Interview Email Reminder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: interview_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Email sent.
+
+  /api/company/results:
+    get:
+      tags:
+        - Company
+      summary: Get Eligible Candidates for Results Publish
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of candidates in interview stage.
+
+  /api/company/results/publish:
+    post:
+      tags:
+        - Company
+      summary: Publish Result
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - application_id
+                - result_status
+              properties:
+                application_id:
+                  type: integer
+                result_status:
+                  type: string
+                  enum: [selected, rejected]
+                remarks:
+                  type: string
+      responses:
+        '200':
+          description: Result published.
+
+  /api/student/stats:
+    get:
+      tags:
+        - Student
+      summary: Student Dashboard Stats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard stats summary.
+
+  /api/student/profile:
+    get:
+      tags:
+        - Student
+      summary: Get Profile Details
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Student profile object.
+    put:
+      tags:
+        - Student
+      summary: Update Profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Profile updated.
+
+  /api/student/resume:
+    post:
+      tags:
+        - Student
+      summary: Upload Resume
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - resume
+              properties:
+                resume:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Resume uploaded.
+
+  /api/student/resume/{filename}:
+    get:
+      tags:
+        - Student
+      summary: Download Resume File
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resume file.
+
+  /api/student/drives:
+    get:
+      tags:
+        - Student
+      summary: List Open Placement Drives
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Drives list.
+
+  /api/student/drives/{drive_id}:
+    get:
+      tags:
+        - Student
+      summary: Get Drive Detail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drive detail.
+
+  /api/student/applications:
+    post:
+      tags:
+        - Student
+      summary: Apply for Drive
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - drive_id
+              properties:
+                drive_id:
+                  type: integer
+                cover_note:
+                  type: string
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - drive_id
+              properties:
+                drive_id:
+                  type: integer
+                cover_note:
+                  type: string
+                resume:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Applied successfully.
+    get:
+      tags:
+        - Student
+      summary: List My Applications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: My application list.
+
+  /api/student/applications/export:
+    post:
+      tags:
+        - Student
+      summary: Export Applications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Export queued.
+
+  /api/student/applications/export/status/{task_id}:
+    get:
+      tags:
+        - Student
+      summary: Check Application Export Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status object.
+
+  /api/student/applications/export/download/{filename}:
+    get:
+      tags:
+        - Student
+      summary: Download Student Application CSV Export
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file download.
+
+  /api/student/applications/{app_id}/offer-letter:
+    get:
+      tags:
+        - Student
+      summary: Download Selected Offer Letter HTML
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML document of offer letter.
+
+  /api/student/interviews:
+    get:
+      tags:
+        - Student
+      summary: Get My Interviews
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Interviews list.
+
+  /api/student/history:
+    get:
+      tags:
+        - Student
+      summary: Get Selected Placement History
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Placed history object list.
+
+  /api/admin/export/students:
+    post:
+      tags:
+        - Export
+      summary: Trigger Students Export (Admin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notify_email:
+                  type: string
+      responses:
+        '200':
+          description: Triggered.
+
+  /api/admin/export/companies:
+    post:
+      tags:
+        - Export
+      summary: Trigger Companies Export (Admin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notify_email:
+                  type: string
+      responses:
+        '202':
+          description: Triggered.
+
+  /api/admin/export/status/{task_id}:
+    get:
+      tags:
+        - Export
+      summary: Check Export Status (Admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status checking.
+
+  /api/admin/export/download/{filename}:
+    get:
+      tags:
+        - Export
+      summary: Download Admin CSV Export
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File download.
+
+  /api/admin/export/list:
+    get:
+      tags:
+        - Export
+      summary: List Admin Generated CSV Exports
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List object.
+
+  /api/admin/reports/monthly-activity:
+    get:
+      tags:
+        - Reports
+      summary: Get Monthly Activity Report JSON
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Activity summary report.
+
+  /api/admin/reports/generate:
+    post:
+      tags:
+        - Reports
+      summary: Trigger Asynchronous Monthly Report CSV Generation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                year:
+                  type: integer
+                month:
+                  type: integer
+                notify_email:
+                  type: string
+      responses:
+        '200':
+          description: Dispatched.
+
+  /api/admin/reports/status/{task_id}:
+    get:
+      tags:
+        - Reports
+      summary: Check Monthly Activity Report Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status checking.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
