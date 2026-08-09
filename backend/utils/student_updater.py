@@ -30,11 +30,40 @@ def apply_student_profile_fields(student, payload):
         student: The Student model instance to update.
         payload:  A dict containing the new field values (from the API request).
     """
+    from exceptions import ValidationError
+    from utils.validators import validate_email, validate_phone, validate_department
+
+    # Work on a mutable copy so we can normalise phone before the generic loop
+    payload = dict(payload)
+
     if student.user:
         if 'name' in payload:
-            student.user.name = payload['name']
-        if 'email' in payload:
-            student.user.email = str(payload['email']).lower().strip()
+            name_val = str(payload['name']).strip()
+            if len(name_val) < 2:
+                raise ValidationError("Full name must be at least 2 characters")
+            student.user.name = name_val
+        if 'email' in payload and str(payload.get('email', '')).strip():
+            student.user.email = validate_email(payload['email'])
+
+    # Validate and normalise phone before the generic field loop
+    if 'phone' in payload:
+        phone_val = payload['phone']
+        if phone_val and str(phone_val).strip():
+            payload['phone'] = validate_phone(phone_val, field_name="Phone number")
+        else:
+            payload['phone'] = None
+
+    # Validate CGPA range (0.0 – 10.0)
+    if 'cgpa' in payload and payload['cgpa'] is not None and str(payload['cgpa']).strip() != '':
+        try:
+            cgpa_float = float(payload['cgpa'])
+        except (ValueError, TypeError):
+            raise ValidationError("CGPA must be a valid number")
+        if not (0.0 <= cgpa_float <= 10.0):
+            raise ValidationError("CGPA must be between 0.0 and 10.0")
+
+    if 'department' in payload and str(payload.get('department', '')).strip():
+        payload['department'] = validate_department(payload['department'])
 
     for field_name in STUDENT_PROFILE_FIELDS:
         if field_name in payload:
@@ -42,3 +71,4 @@ def apply_student_profile_fields(student, payload):
 
     if 'skills' in payload:
         student.save_skills(payload['skills'])
+

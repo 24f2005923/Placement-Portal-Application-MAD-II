@@ -75,13 +75,23 @@ class CompanyService:
     @classmethod
     def update_profile(cls, user_id, payload):
         company = cls.get_company_by_user(user_id)
-        
+
+        if 'company_name' in payload:
+            name_val = str(payload.get('company_name', '')).strip()
+            if len(name_val) < 2:
+                raise ValidationError("Company name must be at least 2 characters")
+            payload['company_name'] = name_val
+
         if 'contact_phone' in payload and payload['contact_phone']:
             payload['contact_phone'] = validate_phone(payload['contact_phone'], field_name="Contact phone")
 
+        if 'contact_email' in payload and str(payload.get('contact_email', '')).strip():
+            from utils.validators import validate_email
+            payload['contact_email'] = validate_email(payload['contact_email'])
+
         allowed_fields = ['company_name', 'industry', 'website', 'description',
                           'contact_person', 'contact_email', 'contact_phone', 'city', 'address']
-                          
+
         for field in allowed_fields:
             if field in payload:
                 setattr(company, field, payload[field])
@@ -231,7 +241,6 @@ class CompanyService:
 
     @classmethod
     def _notify_student_status_update(cls, app, status, extra_info=None):
-        """Sends automated HTML email and GChat notification to the applicant when status updates."""
         try:
             from services.email_service import send_email
             from services.gchat_service import send_gchat_notification
@@ -262,7 +271,7 @@ class CompanyService:
         company = cls.get_company_by_user(user_id)
         app = cls.get_owned_application(company, app_id)
         app.application_status = 'shortlisted'
-        # Keep the student's placement_status in sync
+      
         sync_student_placement_status(app.student, 'shortlisted')
         db.session.commit()
         cls._notify_student_status_update(app, 'shortlisted')
@@ -284,7 +293,7 @@ class CompanyService:
         company = cls.get_company_by_user(user_id)
         app = cls.get_owned_application(company, app_id)
         app.application_status = clean_status
-        # Keep the student's overall placement_status in sync with the application status
+
         sync_student_placement_status(app.student, clean_status)
         db.session.commit()
         cls._notify_student_status_update(app, clean_status)
@@ -318,7 +327,7 @@ class CompanyService:
 
         app = cls.get_owned_application(company, app_id)
 
-        # Enforce Rule: Interview scheduling only allowed for shortlisted applicants
+       
         if app.application_status not in ('shortlisted', 'interview'):
             raise ValidationError('Interviews can only be scheduled for shortlisted applicants. Please shortlist candidate first.')
 
@@ -434,7 +443,7 @@ class CompanyService:
             db.session.add(new_res)
 
         app.application_status = status_res
-        # Mark the student as Placed if they were selected
+       
         sync_student_placement_status(app.student, status_res)
         db.session.commit()
         cls._notify_student_status_update(app, status_res, extra_info=payload.get('remarks'))

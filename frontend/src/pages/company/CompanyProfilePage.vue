@@ -71,9 +71,32 @@ function onPhoneInput(e) {
 }
 
 async function handleSave() {
-  if (form.value.contact_phone && !isValidPhone(form.value.contact_phone)) {
+  const f = form.value
+
+  if (!f.company_name || f.company_name.trim().length < 2) {
+    error.value = 'Company name must be at least 2 characters.'
+    return
+  }
+
+  if (f.contact_email && f.contact_email.trim()) {
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
+    if (!emailRegex.test(f.contact_email.trim())) {
+      error.value = 'Please enter a valid contact email address.'
+      return
+    }
+  }
+
+  if (f.contact_phone && !isValidPhone(f.contact_phone)) {
     error.value = 'Contact phone must be exactly 10 digits.'
     return
+  }
+
+  if (f.website && f.website.trim()) {
+    const urlPattern = /^(https?:\/\/)?([\w.-]+)+[\w\-_~:/?#[\]@!$&'()*+,;=.]+$/i
+    if (!urlPattern.test(f.website.trim())) {
+      error.value = 'Please enter a valid website URL.'
+      return
+    }
   }
 
   saving.value = true

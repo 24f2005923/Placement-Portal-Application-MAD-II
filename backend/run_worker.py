@@ -1,22 +1,4 @@
-"""
-run_worker.py — Celery worker launcher
-───────────────────────────────────────
-Run this script to start the Celery task worker that processes
-background jobs (CSV exports, report generation, etc.).
 
-Usage (from the backend/ directory):
-  python run_worker.py
-
-This is equivalent to:
-  celery -A celery_app worker --loglevel=info --concurrency=2
-
-Notes:
-  • Redis must be running before starting the worker.
-  • For production, use a process manager like supervisord or systemd
-    to keep the worker alive after restarts.
-  • On Windows, Celery requires the 'solo' pool (no multiprocessing).
-    This is set automatically below.
-"""
 
 import sys
 import os

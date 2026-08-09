@@ -53,6 +53,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authAPI } from '@/api/auth'
+import { getPasswordValidationError, getDepartmentValidationError } from '@/utils/validators'
 
 const router = useRouter()
 const loading = ref(false)
@@ -72,9 +73,47 @@ async function handleRegister() {
   error.value = ''
   success.value = ''
 
-  if (!form.value.name || !form.value.register_number || !form.value.email || !form.value.department || !form.value.password) {
+  const f = form.value
+
+  if (!f.name.trim() || !f.register_number.trim() || !f.email.trim() || !f.department.trim() || !f.password) {
     error.value = 'Please fill in all required fields.'
     return
+  }
+
+  if (f.name.trim().length < 2) {
+    error.value = 'Full name must be at least 2 characters.'
+    return
+  }
+
+  if (f.register_number.trim().length < 3) {
+    error.value = 'Register number must be at least 3 characters.'
+    return
+  }
+
+  const deptError = getDepartmentValidationError(f.department)
+  if (deptError) {
+    error.value = deptError
+    return
+  }
+
+  const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
+  if (!emailRegex.test(f.email.trim())) {
+    error.value = 'Please enter a valid email address.'
+    return
+  }
+
+  const pwdError = getPasswordValidationError(f.password)
+  if (pwdError) {
+    error.value = pwdError
+    return
+  }
+
+  if (f.cgpa !== '' && f.cgpa !== null) {
+    const cgpaNum = parseFloat(f.cgpa)
+    if (isNaN(cgpaNum) || cgpaNum < 0 || cgpaNum > 10) {
+      error.value = 'CGPA must be a number between 0 and 10.'
+      return
+    }
   }
 
   loading.value = true
@@ -89,3 +128,4 @@ async function handleRegister() {
   }
 }
 </script>
+

@@ -7,9 +7,9 @@ class Interview(db.Model, DictMixin):
     application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=False, unique=True)
     interview_date = db.Column(db.Date)
     interview_time = db.Column(db.String(10))
-    interview_mode = db.Column(db.String(30), default='online')  # online / offline
-    interview_link = db.Column(db.String(500))    # link if online
-    round_name = db.Column(db.String(100))        # round title
+    interview_mode = db.Column(db.String(30), default='online')  
+    interview_link = db.Column(db.String(500))    
+    round_name = db.Column(db.String(100))        
     remarks = db.Column(db.Text)
 
     application = db.relationship('Application', back_populates='interview')

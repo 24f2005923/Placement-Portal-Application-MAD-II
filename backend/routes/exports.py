@@ -1,15 +1,4 @@
-"""
-exports.py — Admin CSV export API routes
-─────────────────────────────────────────
-Provides endpoints for admins to trigger asynchronous CSV data
-exports and download the resulting files.
 
-Endpoints:
-  POST /api/admin/export/students   — queue student export job
-  POST /api/admin/export/companies  — queue company export job
-  GET  /api/admin/export/status/<task_id>  — check task progress
-  GET  /api/admin/export/download/<filename> — download CSV file
-"""
 
 import os
 import logging

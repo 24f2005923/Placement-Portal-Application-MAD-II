@@ -6,7 +6,7 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 from exceptions import Forbidden, ValidationError, NotFound, Conflict
-from utils.validators import validate_phone, validate_email, check_required_fields
+from utils.validators import validate_phone, validate_email, validate_password, validate_department, check_required_fields
 
 logger = logging.getLogger('auth_service')
 if not logger.handlers:
@@ -119,19 +119,28 @@ class AuthService:
         req = ['name', 'email', 'password', 'register_number', 'department']
         check_required_fields(payload, req)
 
+        name_val = str(payload['name']).strip()
+        if len(name_val) < 2:
+            raise ValidationError("Full name must be at least 2 characters")
+
+        reg_number = str(payload['register_number']).strip()
+        if len(reg_number) < 3:
+            raise ValidationError("Register number must be at least 3 characters")
+
+        dept_val = validate_department(payload['department'])
+
         target_email = validate_email(payload['email'])
-        validated_pwd = payload['password']
+        validated_pwd = validate_password(payload['password'])
 
         email_exists = db.session.query(User).filter(User.email == target_email).first()
         if email_exists:
             raise Conflict('This email is already registered')
 
-        reg_number = payload['register_number'].strip()
         reg_exists = db.session.query(Student).filter(Student.register_number == reg_number).first()
         if reg_exists:
             raise Conflict('This register number already exists')
 
-        user = User(name=payload['name'], email=target_email, role='student')
+        user = User(name=name_val, email=target_email, role='student')
         user.set_password(validated_pwd)
         db.session.add(user)
         db.session.flush()
@@ -144,13 +153,20 @@ class AuthService:
                 cgpa_float = float(cgpa_val)
             except ValueError:
                 raise ValidationError("CGPA must be a valid number")
+            if not (0.0 <= cgpa_float <= 10.0):
+                raise ValidationError("CGPA must be between 0.0 and 10.0")
+
+        phone_val = payload.get('phone')
+        clean_phone = None
+        if phone_val and str(phone_val).strip():
+            clean_phone = validate_phone(phone_val, field_name="Phone number")
 
         student = Student(
             user_id=user.id,
             register_number=reg_number,
-            department=payload['department'],
+            department=dept_val,
             year=payload.get('year', 4),
-            phone=payload.get('phone'),
+            phone=clean_phone,
             cgpa=cgpa_float
         )
 
@@ -169,27 +185,30 @@ class AuthService:
         req = ['company_name', 'email', 'password']
         check_required_fields(payload, req)
 
+        company_name_val = str(payload['company_name']).strip()
+        if len(company_name_val) < 2:
+            raise ValidationError("Company name must be at least 2 characters")
+
         target_email = validate_email(payload['email'])
-        
+        validated_pwd = validate_password(payload['password'])
+
         phone_val = payload.get('phone', '')
         clean_phone = None
         if phone_val and str(phone_val).strip():
             clean_phone = validate_phone(phone_val, field_name="Phone number")
 
-        validated_pwd = payload['password']
-
         email_exists = db.session.query(User).filter(User.email == target_email).first()
         if email_exists:
             raise Conflict('This email is already registered')
 
-        user = User(name=payload['company_name'], email=target_email, role='company')
+        user = User(name=company_name_val, email=target_email, role='company')
         user.set_password(validated_pwd)
         db.session.add(user)
         db.session.flush()
 
         company = Company(
             user_id=user.id,
-            company_name=payload['company_name'],
+            company_name=company_name_val,
             industry=payload.get('industry'),
             contact_email=payload.get('contact_email') or target_email,
             contact_phone=clean_phone,

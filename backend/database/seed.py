@@ -5,7 +5,7 @@ from models.user import User
 logger = logging.getLogger(__name__)
 
 def seed_admin():
-    """Create the initial administrator account only when no admin exists."""
+   
     from flask import current_app
 
     if not current_app.config.get('SEED_ADMIN', True):

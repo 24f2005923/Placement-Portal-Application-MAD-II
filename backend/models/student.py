@@ -11,7 +11,7 @@ class Student(db.Model, DictMixin):
     department = db.Column(db.String(100), nullable=False)
     year = db.Column(db.Integer, default=4)
     cgpa = db.Column(db.Float, default=0.0)
-    skills = db.Column(db.Text, default='[]')   # json list representation
+    skills = db.Column(db.Text, default='[]')   
 
     phone = db.Column(db.String(20))
     address = db.Column(db.Text)

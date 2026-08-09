@@ -82,3 +82,23 @@ def check_required_fields(payload, required_fields):
     missing = [f for f in required_fields if not str(payload.get(f, '')).strip()]
     if missing:
         raise ValidationError(f"Missing required fields: {', '.join(missing)}")
+
+def validate_department(department, field_name="Department"):
+    """
+    Validates department:
+    - Required / non-empty
+    - At least 2 characters
+    - Contains only letters and spaces (rejects numbers and special characters)
+    """
+    if not department or not str(department).strip():
+        raise ValidationError(f"{field_name} is required")
+    
+    clean_dept = str(department).strip()
+    if len(clean_dept) < 2:
+        raise ValidationError(f"{field_name} must be at least 2 characters")
+    
+    if not re.match(r'^[a-zA-Z\s]+$', clean_dept):
+        raise ValidationError(f"{field_name} must contain letters and spaces only")
+    
+    return clean_dept
+

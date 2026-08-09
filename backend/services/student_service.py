@@ -10,8 +10,7 @@ from utils.email_templates import EmailTemplateBuilder
 from utils.student_updater import apply_student_profile_fields
 
 class StudentService:
-    """Service layer handling student workflows and application tracking."""
-    
+   
     @staticmethod
     def get_student_by_user(user_id):
         student = db.session.query(Student).filter(Student.user_id == int(user_id)).first()
@@ -43,7 +42,7 @@ class StudentService:
 
     @classmethod
     def update_profile(cls, user_id, payload):
-        """Update a student's own profile from their request payload."""
+       
         student = cls.get_student_by_user(user_id)
         apply_student_profile_fields(student, payload)
         db.session.commit()

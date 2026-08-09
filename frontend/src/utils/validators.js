@@ -93,3 +93,34 @@ export function getPasswordValidationError(password) {
   }
   return null
 }
+
+/**
+ * Validates department (letters and spaces only, min 2 chars).
+ * @param {string} department 
+ * @returns {boolean}
+ */
+export function isValidDepartment(department) {
+  if (!department) return false
+  const clean = String(department).trim()
+  return clean.length >= 2 && /^[a-zA-Z\s]+$/.test(clean)
+}
+
+/**
+ * Returns human-friendly validation error message for department or null if valid.
+ * @param {string} department 
+ * @returns {string|null}
+ */
+export function getDepartmentValidationError(department) {
+  if (!department || String(department).trim() === '') {
+    return 'Department is required.'
+  }
+  const clean = String(department).trim()
+  if (clean.length < 2) {
+    return 'Department must be at least 2 characters.'
+  }
+  if (!/^[a-zA-Z\s]+$/.test(clean)) {
+    return 'Department must contain letters and spaces only.'
+  }
+  return null
+}
+

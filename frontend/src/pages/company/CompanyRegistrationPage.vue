@@ -64,6 +64,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authAPI } from '@/api/auth'
+import { getPasswordValidationError } from '@/utils/validators'
 
 const router = useRouter()
 const loading = ref(false)
@@ -88,8 +89,27 @@ async function handleRegister() {
   error.value = ''
   success.value = ''
 
-  if (!form.value.company_name || !form.value.email || !form.value.password) {
+  const f = form.value
+
+  if (!f.company_name.trim() || !f.email.trim() || !f.password) {
     error.value = 'Please fill in all required fields.'
+    return
+  }
+
+  if (f.company_name.trim().length < 2) {
+    error.value = 'Company name must be at least 2 characters.'
+    return
+  }
+
+  const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
+  if (!emailRegex.test(f.email.trim())) {
+    error.value = 'Please enter a valid email address.'
+    return
+  }
+
+  const pwdError = getPasswordValidationError(f.password)
+  if (pwdError) {
+    error.value = pwdError
     return
   }
 
@@ -105,3 +125,4 @@ async function handleRegister() {
   }
 }
 </script>
+

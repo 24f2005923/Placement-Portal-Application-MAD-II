@@ -23,16 +23,7 @@ logger = logging.getLogger(__name__)
     default_retry_delay=300,
 )
 def send_interview_reminders(self):
-    """
-    Scheduled task: send interview reminders to students.
-
-    Finds all interviews scheduled for today + tomorrow, then
-    dispatches Email, Google Chat, and SMS notifications for each.
-
-    This task is automatically triggered daily by Celery Beat.
-    You can also trigger it manually from the Celery CLI:
-      celery -A celery_app call tasks.interview_reminders.send_interview_reminders
-    """
+  
     logger.info('=== Interview Reminder Task Started ===')
 
     try:
@@ -146,12 +137,7 @@ def send_interview_reminders(self):
 
 
 def _build_interview_info(interview, application) -> dict:
-    """
-    Extract readable interview details into a plain dictionary.
-
-    This keeps the task function clean and the template building
-    code separate.
-    """
+   
     drive   = application.drive
     company = drive.company if drive else None
 

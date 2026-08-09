@@ -4,20 +4,13 @@ from exceptions import Unauthorized, Forbidden
 
 
 def role_required(role_name):
-    """
-    Authorization decorator factory.
-
-    Separates the two distinct failure cases according to HTTP semantics:
-      401 Unauthorized — token is absent, expired, or cryptographically invalid.
-      403 Forbidden    — token is valid but the bearer holds the wrong role.
-    """
+    
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             try:
                 verify_jwt_in_request()
             except Exception:
-                # JWT missing, expired, or tampered — identity cannot be established.
                 raise Unauthorized('Authorization token is missing or invalid')
 
             jwt_payload = get_jwt()

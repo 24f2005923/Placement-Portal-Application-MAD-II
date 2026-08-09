@@ -92,6 +92,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { studentAPI } from '@/api/student'
 import { openResume } from '@/utils/resume'
+import { isValidPhone } from '@/utils/validators'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -149,6 +150,50 @@ async function handleSave() {
   saving.value = true
   error.value = ''
   success.value = ''
+
+  const f = form.value
+
+  if (f.name !== undefined && f.name.trim().length < 2) {
+    error.value = 'Full name must be at least 2 characters.'
+    saving.value = false
+    return
+  }
+
+  if (f.email && f.email.trim()) {
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
+    if (!emailRegex.test(f.email.trim())) {
+      error.value = 'Please enter a valid email address.'
+      saving.value = false
+      return
+    }
+  }
+
+  if (f.phone && f.phone.trim()) {
+    if (!isValidPhone(f.phone)) {
+      error.value = 'Phone number must be exactly 10 digits.'
+      saving.value = false
+      return
+    }
+  }
+
+  if (f.cgpa !== '' && f.cgpa !== null && f.cgpa !== undefined) {
+    const cgpaNum = parseFloat(f.cgpa)
+    if (isNaN(cgpaNum) || cgpaNum < 0 || cgpaNum > 10) {
+      error.value = 'CGPA must be a number between 0 and 10.'
+      saving.value = false
+      return
+    }
+  }
+
+  if (f.graduation_year !== '' && f.graduation_year !== null && f.graduation_year !== undefined) {
+    const yr = parseInt(f.graduation_year)
+    if (isNaN(yr) || yr < 2000 || yr > 2100) {
+      error.value = 'Graduation year must be a valid year (e.g. 2025).'
+      saving.value = false
+      return
+    }
+  }
+
   try {
     await studentAPI.updateProfile({ ...form.value, skills: skillsInput.value })
     success.value = 'Profile updated successfully.'
