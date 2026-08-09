@@ -118,8 +118,8 @@ const interviews = ref([])
 const applications = ref([])
 const loading = ref(true)
 
-const driveHeaders = ['Company & Drive', 'Role', 'Package', 'Deadline', 'Status', 'Action']
-const driveColumns = ['company_name', 'job_role', 'package', 'deadline', 'status', 'action']
+const driveHeaders = ['Company & Drive', 'Role', 'Eligibility Criteria', 'Package', 'Deadline', 'Status', 'Action']
+const driveColumns = ['company_name', 'job_role', 'eligibility', 'package', 'deadline', 'status', 'action']
 
 const placedApplications = computed(() => {
   return applications.value.filter((a) => a.application_status === 'selected')

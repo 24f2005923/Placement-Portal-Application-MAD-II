@@ -70,8 +70,8 @@ const loading = ref(false)
 const search = ref('')
 let searchTimeout = null
 
-const headers = ['Company & Drive', 'Role', 'Package', 'Deadline', 'Openings', 'Status', 'Action']
-const columns = ['company_name', 'job_role', 'package', 'deadline', 'openings', 'status', 'action']
+const headers = ['Company & Drive', 'Role', 'Eligibility Criteria', 'Package', 'Deadline', 'Openings', 'Status', 'Action']
+const columns = ['company_name', 'job_role', 'eligibility', 'package', 'deadline', 'openings', 'status', 'action']
 
 async function fetchDrives() {
   loading.value = true

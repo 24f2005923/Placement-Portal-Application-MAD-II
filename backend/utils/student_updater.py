@@ -31,16 +31,14 @@ def apply_student_profile_fields(student, payload):
         payload:  A dict containing the new field values (from the API request).
     """
     from exceptions import ValidationError
-    from utils.validators import validate_email, validate_phone, validate_department
+    from utils.validators import validate_email, validate_phone, validate_department, validate_name
 
     # Work on a mutable copy so we can normalise phone before the generic loop
     payload = dict(payload)
 
     if student.user:
         if 'name' in payload:
-            name_val = str(payload['name']).strip()
-            if len(name_val) < 2:
-                raise ValidationError("Full name must be at least 2 characters")
+            name_val = validate_name(payload['name'], field_name="Full name")
             student.user.name = name_val
         if 'email' in payload and str(payload.get('email', '')).strip():
             student.user.email = validate_email(payload['email'])

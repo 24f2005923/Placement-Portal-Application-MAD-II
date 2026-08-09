@@ -92,7 +92,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { studentAPI } from '@/api/student'
 import { openResume } from '@/utils/resume'
-import { isValidPhone } from '@/utils/validators'
+import { isValidPhone, getNameValidationError } from '@/utils/validators'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -153,10 +153,13 @@ async function handleSave() {
 
   const f = form.value
 
-  if (f.name !== undefined && f.name.trim().length < 2) {
-    error.value = 'Full name must be at least 2 characters.'
-    saving.value = false
-    return
+  if (f.name !== undefined) {
+    const nameErr = getNameValidationError(f.name)
+    if (nameErr) {
+      error.value = nameErr
+      saving.value = false
+      return
+    }
   }
 
   if (f.email && f.email.trim()) {

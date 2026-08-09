@@ -102,3 +102,57 @@ def validate_department(department, field_name="Department"):
     
     return clean_dept
 
+def validate_name(name, field_name="Full name"):
+    """
+    Validates name:
+    - Required / non-empty
+    - At least 2 characters
+    - Contains only letters and spaces (rejects numbers and special characters)
+    """
+    if not name or not str(name).strip():
+        raise ValidationError(f"{field_name} is required")
+    
+    clean_name = str(name).strip()
+    if len(clean_name) < 2:
+        raise ValidationError(f"{field_name} must be at least 2 characters")
+    
+    if not re.match(r'^[a-zA-Z\s]+$', clean_name):
+        raise ValidationError(f"{field_name} must contain letters and spaces only")
+    
+    return clean_name
+
+def validate_future_or_today_date(date_str, field_name="Date"):
+    """
+    Validates that a given date string is today or a future date.
+    Rejects past dates.
+    """
+    parsed_date = validate_date_format(date_str, field_name)
+    if parsed_date and parsed_date < date.today():
+        raise ValidationError(f"{field_name} cannot be in the past")
+    return parsed_date
+
+def validate_contact_person(contact_person, field_name="Contact person"):
+    """
+    Validates contact person:
+    - Contains only letters and spaces (rejects numbers and special characters)
+    """
+    if not contact_person or not str(contact_person).strip():
+        return None
+    clean = str(contact_person).strip()
+    if not re.match(r'^[a-zA-Z\s]+$', clean):
+        raise ValidationError(f"{field_name} must contain letters and spaces only")
+    return clean
+
+def validate_website(website, field_name="Website"):
+    """
+    Validates website:
+    - Must start with www. and end with .com or .in
+    """
+    if not website or not str(website).strip():
+        return None
+    clean = str(website).strip().lower()
+    if not (clean.startswith('www.') and (clean.endswith('.com') or clean.endswith('.in'))):
+        raise ValidationError(f"{field_name} must start with www. and end with .com or .in")
+    return clean
+
+

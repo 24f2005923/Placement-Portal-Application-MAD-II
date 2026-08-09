@@ -6,7 +6,7 @@ from models.user import User
 from models.student import Student
 from models.company import Company
 from exceptions import Forbidden, ValidationError, NotFound, Conflict
-from utils.validators import validate_phone, validate_email, validate_password, validate_department, check_required_fields
+from utils.validators import validate_phone, validate_email, validate_password, validate_department, validate_name, check_required_fields
 
 logger = logging.getLogger('auth_service')
 if not logger.handlers:
@@ -119,9 +119,7 @@ class AuthService:
         req = ['name', 'email', 'password', 'register_number', 'department']
         check_required_fields(payload, req)
 
-        name_val = str(payload['name']).strip()
-        if len(name_val) < 2:
-            raise ValidationError("Full name must be at least 2 characters")
+        name_val = validate_name(payload['name'], field_name="Full name")
 
         reg_number = str(payload['register_number']).strip()
         if len(reg_number) < 3:

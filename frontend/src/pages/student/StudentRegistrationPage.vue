@@ -53,7 +53,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authAPI } from '@/api/auth'
-import { getPasswordValidationError, getDepartmentValidationError } from '@/utils/validators'
+import { getPasswordValidationError, getDepartmentValidationError, getNameValidationError } from '@/utils/validators'
 
 const router = useRouter()
 const loading = ref(false)
@@ -80,8 +80,9 @@ async function handleRegister() {
     return
   }
 
-  if (f.name.trim().length < 2) {
-    error.value = 'Full name must be at least 2 characters.'
+  const nameError = getNameValidationError(f.name)
+  if (nameError) {
+    error.value = nameError
     return
   }
 

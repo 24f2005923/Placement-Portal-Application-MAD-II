@@ -124,3 +124,83 @@ export function getDepartmentValidationError(department) {
   return null
 }
 
+/**
+ * Validates name (letters and spaces only, min 2 chars).
+ * @param {string} name 
+ * @returns {boolean}
+ */
+export function isValidName(name) {
+  if (!name) return false
+  const clean = String(name).trim()
+  return clean.length >= 2 && /^[a-zA-Z\s]+$/.test(clean)
+}
+
+/**
+ * Returns human-friendly validation error message for name or null if valid.
+ * @param {string} name 
+ * @returns {string|null}
+ */
+export function getNameValidationError(name) {
+  if (!name || String(name).trim() === '') {
+    return 'Full name is required.'
+  }
+  const clean = String(name).trim()
+  if (clean.length < 2) {
+    return 'Full name must be at least 2 characters.'
+  }
+  if (!/^[a-zA-Z\s]+$/.test(clean)) {
+    return 'Full name must contain letters and spaces only.'
+  }
+  return null
+}
+
+/**
+ * Validates date is not in the past (today or future date).
+ * @param {string} dateStr ISO date string (YYYY-MM-DD)
+ * @param {string} fieldName
+ * @returns {string|null}
+ */
+export function getDateNotPastValidationError(dateStr, fieldName = 'Date') {
+  if (!dateStr || String(dateStr).trim() === '') return null
+  const parts = String(dateStr).trim().split('-')
+  if (parts.length === 3) {
+    const selDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (selDate < today) {
+      return `${fieldName} must be today or a future date.`
+    }
+  }
+  return null
+}
+
+/**
+ * Returns human-friendly validation error for contact person or null if valid.
+ * @param {string} contactPerson
+ * @returns {string|null}
+ */
+export function getContactPersonValidationError(contactPerson) {
+  if (!contactPerson || String(contactPerson).trim() === '') return null
+  const clean = String(contactPerson).trim()
+  if (!/^[a-zA-Z\s]+$/.test(clean)) {
+    return 'Contact person must contain letters and spaces only.'
+  }
+  return null
+}
+
+/**
+ * Returns human-friendly validation error for website or null if valid.
+ * Website must start with 'www.' and end with '.com' or '.in'.
+ * @param {string} website
+ * @returns {string|null}
+ */
+export function getWebsiteValidationError(website) {
+  if (!website || String(website).trim() === '') return null
+  const clean = String(website).trim().toLowerCase()
+  if (!clean.startsWith('www.') || (!clean.endsWith('.com') && !clean.endsWith('.in'))) {
+    return 'Website must start with www. and end with .com or .in'
+  }
+  return null
+}
+
+

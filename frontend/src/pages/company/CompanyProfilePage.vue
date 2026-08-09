@@ -55,7 +55,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { companyAPI } from '@/api/company'
-import { isValidPhone } from '@/utils/validators'
+import { isValidPhone, getContactPersonValidationError, getWebsiteValidationError } from '@/utils/validators'
 
 const company = ref(null)
 const loading = ref(true)
@@ -78,6 +78,14 @@ async function handleSave() {
     return
   }
 
+  if (f.contact_person && f.contact_person.trim()) {
+    const cpErr = getContactPersonValidationError(f.contact_person)
+    if (cpErr) {
+      error.value = cpErr
+      return
+    }
+  }
+
   if (f.contact_email && f.contact_email.trim()) {
     const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
     if (!emailRegex.test(f.contact_email.trim())) {
@@ -92,9 +100,9 @@ async function handleSave() {
   }
 
   if (f.website && f.website.trim()) {
-    const urlPattern = /^(https?:\/\/)?([\w.-]+)+[\w\-_~:/?#[\]@!$&'()*+,;=.]+$/i
-    if (!urlPattern.test(f.website.trim())) {
-      error.value = 'Please enter a valid website URL.'
+    const webErr = getWebsiteValidationError(f.website)
+    if (webErr) {
+      error.value = webErr
       return
     }
   }

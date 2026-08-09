@@ -7,7 +7,7 @@ from models.interview import Interview
 from models.result import Result
 from exceptions import NotFound, ValidationError, Forbidden
 from utils.stats import create_stat_item
-from utils.validators import validate_phone, validate_status_choice, validate_date_format
+from utils.validators import validate_phone, validate_status_choice, validate_date_format, validate_future_or_today_date, validate_contact_person, validate_website
 from utils.email_templates import EmailTemplateBuilder
 from utils.repository import BaseRepository
 from utils.placement import sync_student_placement_status
@@ -82,6 +82,12 @@ class CompanyService:
                 raise ValidationError("Company name must be at least 2 characters")
             payload['company_name'] = name_val
 
+        if 'contact_person' in payload and payload['contact_person'] and str(payload['contact_person']).strip():
+            payload['contact_person'] = validate_contact_person(payload['contact_person'])
+
+        if 'website' in payload and payload['website'] and str(payload['website']).strip():
+            payload['website'] = validate_website(payload['website'])
+
         if 'contact_phone' in payload and payload['contact_phone']:
             payload['contact_phone'] = validate_phone(payload['contact_phone'], field_name="Contact phone")
 
@@ -122,7 +128,7 @@ class CompanyService:
 
         deadline_val = None
         if payload.get('deadline'):
-            deadline_val = validate_date_format(payload['deadline'], 'Deadline')
+            deadline_val = validate_future_or_today_date(payload['deadline'], 'Deadline')
 
         drive = PlacementDrive(
             company_id=company.id,
@@ -157,7 +163,7 @@ class CompanyService:
                 setattr(drive, field, payload[field])
 
         if 'deadline' in payload and payload['deadline']:
-            drive.deadline = validate_date_format(payload['deadline'], 'Deadline')
+            drive.deadline = validate_future_or_today_date(payload['deadline'], 'Deadline')
 
         if 'status' in payload:
             drive.status = validate_status_choice(payload['status'], ['pending', 'closed'])
@@ -336,7 +342,7 @@ class CompanyService:
             db.session.add(interview)
 
         if payload.get('interview_date'):
-            interview.interview_date = validate_date_format(payload['interview_date'], 'Interview date')
+            interview.interview_date = validate_future_or_today_date(payload['interview_date'], 'Interview date')
 
         interview.interview_time = payload.get('interview_time')
         interview.interview_mode = payload.get('interview_mode', 'online')

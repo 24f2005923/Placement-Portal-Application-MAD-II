@@ -34,7 +34,7 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">Date</label>
-            <input v-model="form.interview_date" class="form-control" type="date" required />
+            <input v-model="form.interview_date" class="form-control" type="date" :min="minDate" required />
           </div>
           <div class="col-md-6">
             <label class="form-label">Time</label>
@@ -96,10 +96,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { companyAPI } from '@/api/company'
 import FeedbackAlert from '@/components/common/FeedbackAlert.vue'
 import { usePageFeedback } from '@/composables/usePageFeedback'
+import { getDateNotPastValidationError } from '@/utils/validators'
 
 const { successMsg, errorMsg, showSuccess, showError, clearMessages } = usePageFeedback()
 
@@ -110,10 +111,26 @@ const fetchingApps = ref(true)
 const fetchError = ref(false)
 const sendingEmailId = ref(null)
 const form = ref({ application_id: '', round_name: '', interview_date: '', interview_time: '', interview_mode: 'online', interview_link: '' })
+const minDate = computed(() => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+})
 
 async function handleSchedule() {
-  loading.value = true
   clearMessages()
+
+  if (form.value.interview_date) {
+    const dateErr = getDateNotPastValidationError(form.value.interview_date, 'Interview date')
+    if (dateErr) {
+      showError(dateErr)
+      return
+    }
+  }
+
+  loading.value = true
   try {
     const res = await companyAPI.scheduleInterview(form.value)
     showSuccess(`Interview scheduled for ${res.data.interview.student_name}. Notifications sent.`)

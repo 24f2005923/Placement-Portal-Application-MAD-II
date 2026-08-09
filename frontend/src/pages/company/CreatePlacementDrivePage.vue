@@ -62,7 +62,7 @@
         </div>
         <div class="col-md-6">
           <label class="form-label">Deadline</label>
-          <input v-model="form.deadline" class="form-control" type="date" />
+          <input v-model="form.deadline" class="form-control" type="date" :min="minDate" />
         </div>
         <div class="col-12">
           <label class="form-label">Eligibility Criteria</label>
@@ -84,12 +84,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SectionCard from '@/components/common/SectionCard.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import { companyAPI } from '@/api/company'
 import { driveBadge } from '@/utils/statusMeta'
+import { getDateNotPastValidationError } from '@/utils/validators'
 
 const router = useRouter()
 
@@ -102,6 +103,13 @@ const loading = ref(false)
 const error = ref('')
 const success = ref('')
 const form = ref({ job_role: '', package: '', openings: 1, deadline: '', eligibility: '', description: '' })
+const minDate = computed(() => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+})
 
 const headers = ['Job Role', 'Package', 'Openings', 'Deadline', 'Applications', 'Status', 'Actions']
 const columns = ['job_role', 'package', 'openings', 'deadline', 'applications_count', 'status', 'actions']
@@ -120,9 +128,18 @@ async function fetchDrives() {
 }
 
 async function handleSubmit() {
-  loading.value = true
   error.value = ''
   success.value = ''
+
+  if (form.value.deadline) {
+    const deadlineErr = getDateNotPastValidationError(form.value.deadline, 'Deadline')
+    if (deadlineErr) {
+      error.value = deadlineErr
+      return
+    }
+  }
+
+  loading.value = true
   try {
     await companyAPI.createDrive(form.value)
     success.value = 'Placement drive submitted! It is pending admin approval before students can view it.'

@@ -9,7 +9,7 @@
       <div class="col-md-6"><label class="form-label">Job Role</label><input v-model="form.job_role" class="form-control" required /></div>
       <div class="col-md-6"><label class="form-label">Package</label><input v-model="form.package" class="form-control" /></div>
       <div class="col-md-6"><label class="form-label">Openings</label><input v-model.number="form.openings" class="form-control" type="number" min="1" /></div>
-      <div class="col-md-6"><label class="form-label">Deadline</label><input v-model="form.deadline" class="form-control" type="date" /></div>
+      <div class="col-md-6"><label class="form-label">Deadline</label><input v-model="form.deadline" class="form-control" type="date" :min="minDate" /></div>
       <div class="col-md-6">
         <label class="form-label">Status</label>
         <select v-model="form.status" class="form-select">
@@ -30,9 +30,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { companyAPI } from '@/api/company'
+import { getDateNotPastValidationError } from '@/utils/validators'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,10 +42,26 @@ const saving = ref(false)
 const error = ref('')
 const success = ref('')
 const form = ref({ job_role: '', package: '', openings: 1, deadline: '', status: 'pending', eligibility: '', description: '' })
+const minDate = computed(() => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+})
 
 async function handleSave() {
-  saving.value = true
   error.value = ''
+
+  if (form.value.deadline) {
+    const deadlineErr = getDateNotPastValidationError(form.value.deadline, 'Deadline')
+    if (deadlineErr) {
+      error.value = deadlineErr
+      return
+    }
+  }
+
+  saving.value = true
   try {
     await companyAPI.updateDrive(route.params.id, form.value)
     success.value = 'Drive updated successfully.'
