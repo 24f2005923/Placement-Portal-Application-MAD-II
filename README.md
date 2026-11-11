@@ -1,6 +1,6 @@
 # Placement Portal Application (MAD-II)
 
-A full-stack university placement portal for managing student registrations, company profiles, placement drives, applications, interviews, and reports. The project includes a Flask REST API backend, a Vue 3 frontend, SQLite persistence, and background task processing via Celery and Redis.
+A full-stack university placement portal for managing student registrations, company profiles, placement drives, applications, interviews, and reports. The project includes a Flask REST API backend, a Vue 3 frontend, SQLite, and background task processing via Celery and Redis.
 
 ## Overview
 
@@ -122,13 +122,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-6. Copy the example environment file and update values if needed:
-
-```bash
-copy .env.example .env
-```
-
-7. Start Redis.
+6. Start Redis.
 
 For Windows, Redis can be installed through Memurai or a local Redis service. For local dev, the app defaults to:
 
@@ -136,7 +130,7 @@ For Windows, Redis can be installed through Memurai or a local Redis service. Fo
 redis://localhost:6379/0
 ```
 
-8. Start MailHog if you want to capture emails locally:
+7. Start MailHog if you want to capture emails locally:
 
 ```bash
 cd backend
@@ -149,7 +143,7 @@ Then open:
 http://localhost:8025
 ```
 
-9. Run the Flask app:
+8. Run the Flask app:
 
 ```bash
 python app.py
@@ -175,7 +169,6 @@ cd frontend
 ```bash
 npm install
 ```
-
 4. Start the Vue dev server:
 
 ```bash
@@ -214,20 +207,9 @@ The app seeds a default admin account if enabled in the environment configuratio
 Email: admin@admin.com
 Password: password
 ```
-
-You can adjust these values in the backend `.env` file.
-
 ## Notes
 
 - The backend automatically creates the SQLite database and required tables when it starts.
 - The app stores uploaded resumes in `backend/uploads/resumes/`.
 - Exported files and generated reports are saved under `backend/exports/` and `backend/reports/`.
 - The app uses CORS to allow local frontend access from `http://localhost:5173`.
-
-## License
-
-This project is intended for academic and portfolio use. Please check repository ownership and licensing before production deployment or redistribution.
-
-## Contributing
-
-Contributions are welcome. For feature improvements or bug fixes, create a branch, make the changes, and submit a pull request with a clear summary.
